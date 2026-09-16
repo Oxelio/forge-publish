@@ -1,119 +1,146 @@
 from __future__ import annotations
 
+import bz2
 import gzip
 import io
 import lzma
 import tarfile
 from pathlib import Path
+from urllib.parse import quote
+
 import zstandard
 
 from ..client import ForgejoClient
+from ..errors import PackageError
 
 
-def _read_ar_members(file: Path) -> dict[str, bytes]:
-    """
-    Read the members of a Debian .deb archive.
+AR_MAGIC = b"!<arch>\n"
+AR_HEADER_SIZE = 60
+AR_HEADER_TRAILER = b"`\n"
 
-    A .deb is an ar archive containing files such as:
-        debian-binary
-        control.tar.*
-        data.tar.*
 
-    This implementation avoids requiring dpkg-deb, making the CLI
-    usable on Windows as well as Linux.
-    """
+def _read_control_archive(file: Path) -> tuple[str, bytes]:
+    """Read only the Debian control archive from a .deb ar archive."""
+    try:
+        with file.open("rb") as stream:
+            if stream.read(len(AR_MAGIC)) != AR_MAGIC:
+                raise PackageError(
+                    f"{file.name} is not a valid Debian package."
+                )
 
-    data = file.read_bytes()
+            debian_binary_valid = False
+            control_archive: tuple[str, bytes] | None = None
 
-    if not data.startswith(b"!<arch>\n"):
-        raise RuntimeError(
-            f"{file.name} is not a valid Debian package."
+            while True:
+                header = stream.read(AR_HEADER_SIZE)
+                if not header:
+                    break
+
+                if len(header) != AR_HEADER_SIZE:
+                    raise PackageError(
+                        f"{file.name} contains a truncated ar archive."
+                    )
+
+                if header[58:60] != AR_HEADER_TRAILER:
+                    raise PackageError(
+                        f"{file.name} contains an invalid ar header."
+                    )
+
+                name = header[0:16].decode(
+                    "utf-8",
+                    errors="replace",
+                ).strip().rstrip("/")
+
+                size_text = header[48:58].decode(
+                    "ascii",
+                    errors="replace",
+                ).strip()
+
+                try:
+                    size = int(size_text)
+                except ValueError as exc:
+                    raise PackageError(
+                        f"Invalid ar member size in {file.name}."
+                    ) from exc
+
+                if size < 0:
+                    raise PackageError(
+                        f"Invalid ar member size in {file.name}."
+                    )
+
+                if name == "debian-binary":
+                    content = stream.read(size)
+                    if len(content) != size:
+                        raise PackageError(
+                            f"{file.name} contains a truncated ar member."
+                        )
+                    debian_binary_valid = content.strip() == b"2.0"
+                elif name == "control.tar" or name.startswith("control.tar."):
+                    content = stream.read(size)
+                    if len(content) != size:
+                        raise PackageError(
+                            f"{file.name} contains a truncated ar member."
+                        )
+                    control_archive = (name, content)
+                else:
+                    stream.seek(size, 1)
+
+                if size % 2:
+                    padding = stream.read(1)
+                    if len(padding) != 1:
+                        raise PackageError(
+                            f"{file.name} contains a truncated ar archive."
+                        )
+
+                if debian_binary_valid and control_archive is not None:
+                    return control_archive
+
+    except OSError as exc:
+        raise PackageError(f"Unable to read {file}.") from exc
+
+    if not debian_binary_valid:
+        raise PackageError(
+            f"{file.name} does not contain a valid debian-binary member."
         )
 
-    offset = 8
-    members: dict[str, bytes] = {}
-
-    while offset < len(data):
-        if offset + 60 > len(data):
-            raise RuntimeError(
-                f"{file.name} contains a truncated ar archive."
-            )
-
-        header = data[offset:offset + 60]
-
-        name = header[0:16].decode(
-            "utf-8",
-            errors="replace",
-        ).strip()
-
-        size_text = header[48:58].decode(
-            "ascii",
-            errors="replace",
-        ).strip()
-
-        try:
-            size = int(size_text)
-        except ValueError as exc:
-            raise RuntimeError(
-                f"Invalid ar member size in {file.name}."
-            ) from exc
-
-        content_start = offset + 60
-        content_end = content_start + size
-
-        if content_end > len(data):
-            raise RuntimeError(
-                f"{file.name} contains a truncated ar member."
-            )
-
-        members[name.rstrip("/")] = data[
-            content_start:content_end
-        ]
-
-        offset = content_end
-
-        # ar members are aligned to even offsets.
-        if offset % 2:
-            offset += 1
-
-    return members
+    raise PackageError(
+        f"{file.name} does not contain a control archive."
+    )
 
 
 def _decompress_control(data: bytes, filename: str) -> bytes:
-    if filename.endswith(".gz"):
-        return gzip.decompress(data)
+    try:
+        if filename == "control.tar":
+            return data
+        if filename.endswith(".gz"):
+            return gzip.decompress(data)
+        if filename.endswith(".xz"):
+            return lzma.decompress(data)
+        if filename.endswith(".zst"):
+            with zstandard.ZstdDecompressor().stream_reader(
+                io.BytesIO(data)
+            ) as reader:
+                return reader.read()
+        if filename.endswith(".bz2"):
+            return bz2.decompress(data)
+        if filename.endswith(".lzma"):
+            return lzma.decompress(data)
+    except (OSError, lzma.LZMAError, zstandard.ZstdError) as exc:
+        raise PackageError(
+            f"Unable to decompress Debian control archive: {filename}"
+        ) from exc
 
-    if filename.endswith(".xz"):
-        return lzma.decompress(data)
-
-    if filename.endswith(".zst"):
-        return zstandard.ZstdDecompressor().decompress(data)
-
-    if filename.endswith(".bz2"):
-        import bz2
-
-        return bz2.decompress(data)
-
-    if filename.endswith(".lzma"):
-        return lzma.decompress(data)
-
-    raise RuntimeError(
+    raise PackageError(
         f"Unsupported control archive format: {filename}"
     )
 
 
 def _parse_control(data: bytes) -> dict[str, str]:
     result: dict[str, str] = {}
-
-    text = data.decode(
-        "utf-8",
-        errors="replace",
-    )
-
+    text = data.decode("utf-8", errors="replace")
     current_key: str | None = None
 
     for line in text.splitlines():
-        # Debian control files support continuation lines.
         if line.startswith((" ", "\t")) and current_key:
             result[current_key] += "\n" + line.strip()
             continue
@@ -122,7 +149,6 @@ def _parse_control(data: bytes) -> dict[str, str]:
             continue
 
         key, value = line.split(":", 1)
-
         key = key.strip()
         value = value.strip()
 
@@ -134,24 +160,9 @@ def _parse_control(data: bytes) -> dict[str, str]:
 
 
 def read_deb_metadata(file: Path) -> dict[str, str]:
-    members = _read_ar_members(file)
-
-    control_member = next(
-        (
-            name
-            for name in members
-            if name.startswith("control.tar.")
-        ),
-        None,
-    )
-
-    if control_member is None:
-        raise RuntimeError(
-            f"{file.name} does not contain a control archive."
-        )
-
+    control_member, compressed_data = _read_control_archive(file)
     control_tar_data = _decompress_control(
-        members[control_member],
+        compressed_data,
         control_member,
     )
 
@@ -160,54 +171,39 @@ def read_deb_metadata(file: Path) -> dict[str, str]:
             fileobj=io.BytesIO(control_tar_data),
             mode="r:",
         ) as archive:
+            control_file = next(
+                (
+                    member
+                    for member in archive.getmembers()
+                    if member.name in ("./control", "control")
+                ),
+                None,
+            )
 
-            control_file = None
-
-            for member in archive.getmembers():
-                if member.name in (
-                    "./control",
-                    "control",
-                ):
-                    control_file = member
-                    break
-
-            if control_file is None:
-                raise RuntimeError(
-                    f"{file.name} does not contain a control file."
+            if control_file is None or not control_file.isfile():
+                raise PackageError(
+                    f"{file.name} does not contain a regular control file."
                 )
 
             extracted = archive.extractfile(control_file)
-
             if extracted is None:
-                raise RuntimeError(
+                raise PackageError(
                     f"Unable to read control file from {file.name}."
                 )
 
             control_data = extracted.read()
-
     except tarfile.TarError as exc:
-        raise RuntimeError(
+        raise PackageError(
             f"Invalid control archive in {file.name}."
         ) from exc
 
     control = _parse_control(control_data)
-
-    required = (
-        "Package",
-        "Version",
-        "Architecture",
-    )
-
-    missing = [
-        field
-        for field in required
-        if not control.get(field)
-    ]
+    required = ("Package", "Version", "Architecture")
+    missing = [field for field in required if not control.get(field)]
 
     if missing:
-        raise RuntimeError(
-            f"Missing Debian control fields: "
-            f"{', '.join(missing)}"
+        raise PackageError(
+            "Missing Debian control fields: " + ", ".join(missing)
         )
 
     return {
@@ -224,7 +220,6 @@ def publish(
     component: str,
     dry_run: bool = False,
 ) -> None:
-
     metadata = read_deb_metadata(file)
 
     print()
@@ -236,11 +231,14 @@ def publish(
     print(f"Distribution : {distribution}")
     print(f"Component    : {component}")
 
+    owner = quote(client.config.owner, safe="")
+    encoded_distribution = quote(distribution, safe="")
+    encoded_component = quote(component, safe="")
     url = (
         f"{client.config.url}"
-        f"/api/packages/{client.config.owner}"
-        f"/debian/pool/{distribution}"
-        f"/{component}/upload"
+        f"/api/packages/{owner}"
+        f"/debian/pool/{encoded_distribution}"
+        f"/{encoded_component}/upload"
     )
 
     print(f"URL          : {url}")

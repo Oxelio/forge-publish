@@ -6,7 +6,13 @@ import click
 
 from .client import ForgejoClient
 from .config import configure, load_config
+from .errors import ForgePublishError
 from .publishers import deb, generic, npm
+
+
+def _create_client(*, dry_run: bool) -> ForgejoClient:
+    config = load_config(require_token=not dry_run)
+    return ForgejoClient(config)
 
 
 @click.group()
@@ -36,12 +42,14 @@ def config_command(
     username: str,
 ):
     """Configure Forgejo credentials."""
-
-    configure(
-        url=url,
-        owner=owner,
-        username=username,
-    )
+    try:
+        configure(
+            url=url,
+            owner=owner,
+            username=username,
+        )
+    except ForgePublishError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @main.command("deb")
@@ -65,10 +73,7 @@ def config_command(
     default="main",
     show_default=True,
 )
-@click.option(
-    "--dry-run",
-    is_flag=True,
-)
+@click.option("--dry-run", is_flag=True)
 def deb_command(
     file: Path,
     distribution: str,
@@ -76,11 +81,8 @@ def deb_command(
     dry_run: bool,
 ):
     """Publish a Debian package."""
-
     try:
-        config = load_config()
-        client = ForgejoClient(config)
-
+        client = _create_client(dry_run=dry_run)
         deb.publish(
             client=client,
             file=file,
@@ -88,9 +90,8 @@ def deb_command(
             component=component,
             dry_run=dry_run,
         )
-
-    except RuntimeError as exc:
-        raise click.ClickException(str(exc))
+    except ForgePublishError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @main.command("generic")
@@ -117,10 +118,7 @@ def deb_command(
     "--filename",
     help="Filename stored in Forgejo.",
 )
-@click.option(
-    "--dry-run",
-    is_flag=True,
-)
+@click.option("--dry-run", is_flag=True)
 def generic_command(
     file: Path,
     package_name: str,
@@ -129,11 +127,8 @@ def generic_command(
     dry_run: bool,
 ):
     """Publish a Generic package."""
-
     try:
-        config = load_config()
-        client = ForgejoClient(config)
-
+        client = _create_client(dry_run=dry_run)
         generic.publish(
             client=client,
             file=file,
@@ -142,9 +137,8 @@ def generic_command(
             filename=filename,
             dry_run=dry_run,
         )
-
-    except RuntimeError as exc:
-        raise click.ClickException(str(exc))
+    except ForgePublishError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @main.command("npm")
@@ -157,25 +151,18 @@ def generic_command(
     ),
     default=".",
 )
-@click.option(
-    "--dry-run",
-    is_flag=True,
-)
+@click.option("--dry-run", is_flag=True)
 def npm_command(
     directory: Path,
     dry_run: bool,
 ):
     """Publish an NPM package."""
-
     try:
-        config = load_config()
-        client = ForgejoClient(config)
-
+        client = _create_client(dry_run=dry_run)
         npm.publish(
             client=client,
             directory=directory,
             dry_run=dry_run,
         )
-
-    except RuntimeError as exc:
-        raise click.ClickException(str(exc))
+    except ForgePublishError as exc:
+        raise click.ClickException(str(exc)) from exc

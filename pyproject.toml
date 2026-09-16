@@ -10,9 +10,16 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "click>=8.1",
+    "keyring>=25",
     "requests>=2.31",
+    "tomli>=2.0; python_version < '3.11'",
     "tomli-w>=1.0",
     "zstandard>=0.23",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
 ]
 
 [project.scripts]
@@ -20,3 +27,7 @@ forge-publish = "forge_publish.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
