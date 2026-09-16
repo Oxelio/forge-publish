@@ -7,12 +7,11 @@ name = "forge-publish"
 version = "0.1.0"
 description = "CLI for publishing packages to Forgejo package registries"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
     "click>=8.1",
     "keyring>=25",
     "requests>=2.31",
-    "tomli>=2.0; python_version < '3.11'",
     "tomli-w>=1.0",
     "zstandard>=0.23",
 ]

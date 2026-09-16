@@ -10,10 +10,7 @@ from urllib.parse import urlsplit
 import keyring
 from keyring.errors import KeyringError
 
-try:
-    import tomllib
-except ModuleNotFoundError:  # Python 3.10
-    import tomli as tomllib
+import tomllib
 
 import tomli_w
 
