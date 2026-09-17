@@ -28,6 +28,10 @@ The goal is to make package publication predictable without requiring users to r
 - HTTP timeout and Forgejo error handling
 - Clear package information before publication
 - Cross-platform support
+- Automated tests with branch coverage
+- Ruff linting and formatting
+- Pre-commit quality checks
+- Conventional Commit validation
 - Designed to be extended with additional Forgejo package registries
 
 ---
@@ -645,6 +649,7 @@ forge-publish deb servcli_1.9.3-0_i386.deb --dry-run
 forge-publish/
 ├── .gitattributes
 ├── .gitignore
+├── .pre-commit-config.yaml
 ├── README.md
 ├── pyproject.toml
 ├── src/
@@ -712,6 +717,14 @@ publishers/
 
 Contains unit tests for configuration, HTTP handling, Debian parsing, Generic publication, and NPM publication.
 
+### `.pre-commit-config.yaml`
+
+Defines local Git hooks used during development:
+
+- Ruff linting and automatic fixes before commits
+- Ruff formatting before commits
+- Conventional Commit validation through Commitizen
+
 ---
 
 # Development
@@ -729,13 +742,13 @@ Create a Python 3.14 virtual environment:
 python -m venv .venv
 ```
 
-Activate it:
+Activate it on Linux or macOS:
 
 ```bash
 source .venv/bin/activate
 ```
 
-On Windows:
+On Windows PowerShell:
 
 ```powershell
 .venv\Scripts\Activate.ps1
@@ -747,11 +760,165 @@ Install the project and development dependencies:
 python -m pip install -e ".[dev]"
 ```
 
-Run the tests:
+Development dependencies include:
+
+- pytest
+- pytest-cov
+- Ruff
+- pre-commit
+- Commitizen
+
+---
+
+## Git hooks
+
+Install the pre-commit hook used for linting and formatting:
+
+```bash
+pre-commit install
+```
+
+Install the `commit-msg` hook used to validate Conventional Commits:
+
+```bash
+pre-commit install --hook-type commit-msg
+```
+
+After installation, normal commits automatically run the configured checks.
+
+For example:
+
+```bash
+git commit -m "fix(config): validate Forgejo URL"
+```
+
+The `pre-commit` stage runs:
+
+```text
+ruff check --fix
+ruff format
+```
+
+The `commit-msg` stage validates the commit message with Commitizen.
+
+Commit messages must follow the Conventional Commits format, for example:
+
+```text
+feat(cli): add config command
+fix(config): reject invalid URLs
+docs(readme): update development setup
+test(client): add HTTP error coverage
+chore(dev): update Ruff configuration
+```
+
+A non-conforming message such as:
+
+```text
+update stuff
+```
+
+is rejected.
+
+If Ruff modifies files automatically, the commit is stopped so the changes can be reviewed and staged:
+
+```bash
+git add .
+git commit
+```
+
+To run all configured pre-commit hooks manually against the repository:
+
+```bash
+pre-commit run --all-files
+```
+
+---
+
+## Tests
+
+Run the full test suite:
 
 ```bash
 pytest
 ```
+
+Coverage and branch coverage are enabled automatically through `pyproject.toml`.
+
+The test output includes:
+
+- statement coverage
+- branch coverage
+- partially covered branches
+- missing lines
+
+To generate an HTML coverage report:
+
+```bash
+pytest --cov-report=html
+```
+
+The report is generated in:
+
+```text
+htmlcov/
+```
+
+Open:
+
+```text
+htmlcov/index.html
+```
+
+in a browser to inspect coverage per file and line.
+
+---
+
+## Linting
+
+Check the repository with Ruff:
+
+```bash
+ruff check .
+```
+
+Automatically fix supported lint issues:
+
+```bash
+ruff check . --fix
+```
+
+---
+
+## Formatting
+
+Check formatting without modifying files:
+
+```bash
+ruff format --check .
+```
+
+Format the repository:
+
+```bash
+ruff format .
+```
+
+---
+
+## Recommended local checks
+
+Before pushing changes, run:
+
+```bash
+pytest
+ruff check .
+ruff format --check .
+pre-commit run --all-files
+```
+
+---
+
+## Run the CLI
 
 Run the CLI directly:
 
@@ -759,7 +926,7 @@ Run the CLI directly:
 python -m forge_publish --help
 ```
 
-Or:
+Or use the installed command:
 
 ```bash
 forge-publish --help
@@ -825,6 +992,7 @@ The project favors:
 - useful errors
 - cross-platform operation
 - secure credential handling
+- automated quality checks
 - easy extension without unnecessary abstractions
 
 ---
