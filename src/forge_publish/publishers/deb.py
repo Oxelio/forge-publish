@@ -6,6 +6,7 @@ import io
 import lzma
 import tarfile
 from pathlib import Path
+from typing import BinaryIO
 from urllib.parse import quote
 
 import zstandard
@@ -18,7 +19,92 @@ AR_HEADER_SIZE = 60
 AR_HEADER_TRAILER = b"`\n"
 
 
-def _read_control_archive(file: Path) -> tuple[str, bytes]:
+def _is_control_archive(name: str) -> bool:
+    return name == "control.tar" or name.startswith("control.tar.")
+
+
+def _read_ar_header(
+    stream: BinaryIO,
+    filename: str,
+) -> bytes | None:
+    header = stream.read(AR_HEADER_SIZE)
+
+    if not header:
+        return None
+
+    if len(header) != AR_HEADER_SIZE:
+        raise PackageError(f"{filename} contains a truncated ar archive.")
+
+    if header[58:60] != AR_HEADER_TRAILER:
+        raise PackageError(f"{filename} contains an invalid ar header.")
+
+    return header
+
+
+def _parse_ar_header(
+    header: bytes,
+    filename: str,
+) -> tuple[str, int]:
+    name = (
+        header[0:16]
+        .decode(
+            "utf-8",
+            errors="replace",
+        )
+        .strip()
+        .rstrip("/")
+    )
+
+    size_text = (
+        header[48:58]
+        .decode(
+            "ascii",
+            errors="replace",
+        )
+        .strip()
+    )
+
+    try:
+        size = int(size_text)
+    except ValueError as exc:
+        raise PackageError(f"Invalid ar member size in {filename}.") from exc
+
+    if size < 0:
+        raise PackageError(f"Invalid ar member size in {filename}.")
+
+    return name, size
+
+
+def _read_ar_member(
+    stream: BinaryIO,
+    size: int,
+    filename: str,
+) -> bytes:
+    content = stream.read(size)
+
+    if len(content) != size:
+        raise PackageError(f"{filename} contains a truncated ar member.")
+
+    return content
+
+
+def _consume_ar_padding(
+    stream: BinaryIO,
+    size: int,
+    filename: str,
+) -> None:
+    if size % 2 == 0:
+        return
+
+    padding = stream.read(1)
+
+    if len(padding) != 1:
+        raise PackageError(f"{filename} contains a truncated ar archive.")
+
+
+def _read_control_archive(
+    file: Path,
+) -> tuple[str, bytes]:
     """Read only the Debian control archive from a .deb ar archive."""
     try:
         with file.open("rb") as stream:
@@ -29,68 +115,40 @@ def _read_control_archive(file: Path) -> tuple[str, bytes]:
             control_archive: tuple[str, bytes] | None = None
 
             while True:
-                header = stream.read(AR_HEADER_SIZE)
-                if not header:
+                header = _read_ar_header(stream, file.name)
+
+                if header is None:
                     break
 
-                if len(header) != AR_HEADER_SIZE:
-                    raise PackageError(f"{file.name} contains a truncated ar archive.")
-
-                if header[58:60] != AR_HEADER_TRAILER:
-                    raise PackageError(f"{file.name} contains an invalid ar header.")
-
-                name = (
-                    header[0:16]
-                    .decode(
-                        "utf-8",
-                        errors="replace",
-                    )
-                    .strip()
-                    .rstrip("/")
+                name, size = _parse_ar_header(
+                    header,
+                    file.name,
                 )
-
-                size_text = (
-                    header[48:58]
-                    .decode(
-                        "ascii",
-                        errors="replace",
-                    )
-                    .strip()
-                )
-
-                try:
-                    size = int(size_text)
-                except ValueError as exc:
-                    raise PackageError(
-                        f"Invalid ar member size in {file.name}."
-                    ) from exc
-
-                if size < 0:
-                    raise PackageError(f"Invalid ar member size in {file.name}.")
 
                 if name == "debian-binary":
-                    content = stream.read(size)
-                    if len(content) != size:
-                        raise PackageError(
-                            f"{file.name} contains a truncated ar member."
-                        )
+                    content = _read_ar_member(
+                        stream,
+                        size,
+                        file.name,
+                    )
                     debian_binary_valid = content.strip() == b"2.0"
-                elif name == "control.tar" or name.startswith("control.tar."):
-                    content = stream.read(size)
-                    if len(content) != size:
-                        raise PackageError(
-                            f"{file.name} contains a truncated ar member."
-                        )
+
+                elif _is_control_archive(name):
+                    content = _read_ar_member(
+                        stream,
+                        size,
+                        file.name,
+                    )
                     control_archive = (name, content)
+
                 else:
                     stream.seek(size, 1)
 
-                if size % 2:
-                    padding = stream.read(1)
-                    if len(padding) != 1:
-                        raise PackageError(
-                            f"{file.name} contains a truncated ar archive."
-                        )
+                _consume_ar_padding(
+                    stream,
+                    size,
+                    file.name,
+                )
 
                 if debian_binary_valid and control_archive is not None:
                     return control_archive
@@ -143,7 +201,7 @@ def _parse_control(data: bytes) -> dict[str, str]:
             continue
 
         key, value = line.split(":", 1)
-        key = key.strip()
+        key = key.strip().casefold()
         value = value.strip()
 
         if key:
@@ -151,6 +209,19 @@ def _parse_control(data: bytes) -> dict[str, str]:
             current_key = key
 
     return result
+
+
+def _validate_path_segment(value: str, field: str) -> None:
+    if not value or value != value.strip():
+        raise PackageError(
+            f"{field} must be non-empty and must not have "
+            "leading or trailing whitespace."
+        )
+
+    if value in {".", ".."}:
+        raise PackageError(
+            f"Invalid {field}: {value!r}. Path traversal segments are not allowed."
+        )
 
 
 def read_deb_metadata(file: Path) -> dict[str, str]:
@@ -188,16 +259,16 @@ def read_deb_metadata(file: Path) -> dict[str, str]:
         raise PackageError(f"Invalid control archive in {file.name}.") from exc
 
     control = _parse_control(control_data)
-    required = ("Package", "Version", "Architecture")
+    required = ("package", "version", "architecture")
     missing = [field for field in required if not control.get(field)]
 
     if missing:
         raise PackageError("Missing Debian control fields: " + ", ".join(missing))
 
     return {
-        "name": control["Package"],
-        "version": control["Version"],
-        "architecture": control["Architecture"],
+        "name": control["package"],
+        "version": control["version"],
+        "architecture": control["architecture"],
     }
 
 
@@ -208,6 +279,8 @@ def publish(
     component: str,
     dry_run: bool = False,
 ) -> None:
+    _validate_path_segment(distribution, "distribution")
+    _validate_path_segment(component, "component")
     metadata = read_deb_metadata(file)
 
     print()

@@ -55,6 +55,18 @@ class Config:
             pass
 
 
+def _normalize_owner(owner: str) -> str:
+    normalized = owner.strip()
+
+    if not normalized:
+        raise ConfigurationError("Forgejo owner cannot be empty.")
+
+    if normalized in {".", ".."}:
+        raise ConfigurationError("Forgejo owner cannot be '.' or '..'.")
+
+    return normalized
+
+
 def _normalize_url(url: str) -> str:
     normalized = url.strip().rstrip("/")
     parsed = urlsplit(normalized)
@@ -106,7 +118,7 @@ def _build_config(data: dict[str, object]) -> Config:
 
     return Config(
         url=_normalize_url(str(data["url"])),
-        owner=str(data["owner"]).strip(),
+        owner=_normalize_owner(str(data["owner"])),
         username=str(data["username"]).strip(),
     )
 
@@ -117,10 +129,8 @@ def _get_keyring_token(config: Config) -> str | None:
             KEYRING_SERVICE,
             config.credential_name,
         )
-    except KeyringError as exc:
-        raise ConfigurationError(
-            "Unable to read the Forgejo token from the system keyring."
-        ) from exc
+    except KeyringError:
+        return None
 
 
 def _set_keyring_token(config: Config, token: str) -> None:
@@ -175,12 +185,10 @@ def configure(
 ) -> None:
     config = Config(
         url=_normalize_url(url),
-        owner=owner.strip(),
+        owner=_normalize_owner(owner),
         username=username.strip(),
     )
 
-    if not config.owner:
-        raise ConfigurationError("Forgejo owner cannot be empty.")
     if not config.username:
         raise ConfigurationError("Forgejo username cannot be empty.")
 
