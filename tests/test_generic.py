@@ -50,3 +50,33 @@ def test_generic_rejects_invalid_package_name(tmp_path: Path) -> None:
             package_name="bad/name",
             version="1.0.0",
         )
+
+
+@pytest.mark.parametrize(
+    ("package_name", "version", "filename"),
+    [
+        (".", "1.0.0", "firmware.bin"),
+        ("..", "1.0.0", "firmware.bin"),
+        ("firmware", ".", "firmware.bin"),
+        ("firmware", "..", "firmware.bin"),
+        ("firmware", "1.0.0", "."),
+        ("firmware", "1.0.0", ".."),
+    ],
+)
+def test_generic_rejects_unsafe_path_segments(
+    tmp_path: Path,
+    package_name: str,
+    version: str,
+    filename: str,
+) -> None:
+    package = tmp_path / "firmware.bin"
+    package.write_bytes(b"data")
+
+    with pytest.raises(PackageError, match="Path traversal"):
+        generic.publish(
+            client=FakeClient(),
+            file=package,
+            package_name=package_name,
+            version=version,
+            filename=filename,
+        )
