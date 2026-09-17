@@ -187,13 +187,9 @@ $env:FORGE_PUBLISH_TOKEN = "..."
 
 This is particularly useful in CI/CD environments.
 
-When present, the environment variable is used as the authentication token instead of the persistent keyring credential.
+When present, the environment variable takes priority over the token stored in the system keyring.
 
-### Legacy configuration
-
-Older versions of `forge-publish` could store the token directly in `config.toml`.
-
-When such a configuration is encountered, `forge-publish` migrates the token to the system keyring and rewrites the configuration without the plaintext token.
+When no environment token is available, `forge-publish` checks the system keyring and falls back to an interactive token prompt when necessary.
 
 ---
 
@@ -683,7 +679,7 @@ Handles:
 - Forgejo URL, owner, and username configuration
 - system keyring authentication
 - environment-variable authentication
-- legacy token migration
+- interactive credential fallback
 
 ### `client.py`
 
