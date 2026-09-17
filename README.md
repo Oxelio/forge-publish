@@ -4,26 +4,31 @@ A small command-line interface (CLI) for publishing packages to a [Forgejo](http
 
 `forge-publish` provides a single command-line tool for publishing different package types to Forgejo:
 
-* Debian packages (`.deb`)
-* Generic packages (archives, binaries, firmware, etc.)
-* NPM packages
+- Debian packages (`.deb`)
+- Generic packages (archives, binaries, firmware, etc.)
+- NPM packages
 
-The goal is to avoid having to remember Forgejo API URLs and `curl` commands for every package publication.
+The goal is to make package publication predictable without requiring users to remember Forgejo API URLs, authentication details, or `curl` commands.
 
 ---
 
 ## Features
 
-* Publish Debian packages
-* Publish Generic packages
-* Publish NPM packages
-* Store Forgejo connection settings locally
-* Authenticate using a Forgejo token
-* Dry-run mode
-* Automatic Debian package metadata detection
-* Clear package information before publication
-* Reusable command-line interface
-* Designed to be easily extended with additional package registries
+- Publish Debian packages
+- Publish Generic packages
+- Publish NPM packages
+- Store Forgejo connection settings locally
+- Store Forgejo tokens securely in the system keyring
+- Support `FORGE_PUBLISH_TOKEN` for CI/CD environments
+- Dry-run mode without requiring authentication
+- Automatic Debian package metadata detection
+- Parse Debian packages without `dpkg-deb`
+- Support gzip, xz, zstd, bzip2, lzma, and uncompressed Debian control archives
+- Use temporary NPM authentication configuration
+- HTTP timeout and Forgejo error handling
+- Clear package information before publication
+- Cross-platform support
+- Designed to be extended with additional Forgejo package registries
 
 ---
 
@@ -31,24 +36,16 @@ The goal is to avoid having to remember Forgejo API URLs and `curl` commands for
 
 ### Common
 
-* Python 3.10 or newer
-* Access to a Forgejo instance
-* A Forgejo user account
-* A Forgejo access token with permission to publish packages
+- Python 3.14 or newer
+- Access to a Forgejo instance
+- A Forgejo user account
+- A Forgejo access token with permission to publish packages
 
-### Debian packages
-
-The `dpkg-deb` command must be available in `PATH`.
-
-On Debian/Ubuntu:
-
-```bash
-sudo apt install dpkg
-```
+No external Debian tooling such as `dpkg-deb` is required.
 
 ### NPM packages
 
-Node.js and npm must be installed and available in `PATH`.
+Node.js and npm must be installed and available in `PATH` to publish NPM packages.
 
 Check with:
 
@@ -73,16 +70,16 @@ cd forge-publish
 Create a virtual environment:
 
 ```bash
-python3 -m venv .venv
+python -m venv .venv
 ```
 
-Activate it:
+Activate it on Linux or macOS:
 
 ```bash
 source .venv/bin/activate
 ```
 
-On Windows:
+On Windows PowerShell:
 
 ```powershell
 .venv\Scripts\Activate.ps1
@@ -91,7 +88,7 @@ On Windows:
 Install the project:
 
 ```bash
-pip install -e .
+python -m pip install -e .
 ```
 
 The `forge-publish` command is then available:
@@ -117,16 +114,28 @@ Forgejo username:
 Forgejo token:
 ```
 
-The Forgejo URL and package owner can also be specified:
+The default Forgejo URL is:
+
+```text
+https://forge.fco.local
+```
+
+The default package owner is:
+
+```text
+Software
+```
+
+Both can be overridden:
 
 ```bash
 forge-publish config \
     --url https://forge.example.com \
     --owner Software \
-    --username StephWIP
+    --username my-user
 ```
 
-The configuration is stored in:
+The non-secret configuration is stored in:
 
 ```text
 ~/.config/forge-publish/config.toml
@@ -143,42 +152,69 @@ Example:
 ```toml
 url = "https://forge.example.com"
 owner = "Software"
-username = "StephWIP"
-token = "..."
+username = "my-user"
 ```
 
-The configuration file is created with restrictive permissions where supported.
+The Forgejo token is **not stored in `config.toml`**.
+
+It is stored separately in the operating system's credential store through the Python `keyring` package.
+
+Depending on the platform, this typically uses facilities such as:
+
+- Windows Credential Manager
+- macOS Keychain
+- a supported Linux secret-service backend
 
 ### Environment variable
 
-The Forgejo token can also be provided through:
+The Forgejo token can also be supplied through:
+
+```text
+FORGE_PUBLISH_TOKEN
+```
+
+Linux/macOS:
 
 ```bash
 export FORGE_PUBLISH_TOKEN="..."
 ```
 
-This can be useful in CI/CD environments.
+PowerShell:
 
-The environment variable takes precedence when a token is not stored in the configuration.
+```powershell
+$env:FORGE_PUBLISH_TOKEN = "..."
+```
+
+This is particularly useful in CI/CD environments.
+
+When present, the environment variable is used as the authentication token instead of the persistent keyring credential.
+
+### Legacy configuration
+
+Older versions of `forge-publish` could store the token directly in `config.toml`.
+
+When such a configuration is encountered, `forge-publish` migrates the token to the system keyring and rewrites the configuration without the plaintext token.
 
 ---
 
 ## Security
 
-Never commit your Forgejo token to Git.
+Forgejo access tokens are secrets.
 
-Do not put the token directly in:
+Never commit them to Git or store them directly in:
 
-* source code
-* shell scripts
-* CI configuration committed to the repository
-* documentation
-* command examples
-* `.gitignore` exceptions
+- source code
+- shell scripts
+- documentation
+- committed CI configuration
+- command examples
+- project configuration files
+
+For local interactive use, prefer the system keyring.
+
+For CI/CD, prefer `FORGE_PUBLISH_TOKEN` through the CI platform's secret-management mechanism.
 
 If a token is accidentally exposed, revoke it and generate a new one.
-
-For CI/CD, prefer an environment variable or the CI secret-management mechanism.
 
 ---
 
@@ -190,7 +226,7 @@ Show the available commands:
 forge-publish --help
 ```
 
-The available commands are:
+Available commands:
 
 ```text
 config
@@ -205,13 +241,13 @@ npm
 
 ## Publish a Debian package
 
-For example:
-
 ```bash
 forge-publish deb servcli_1.9.3-0_i386.deb
 ```
 
-The CLI reads the package metadata using `dpkg-deb`.
+`forge-publish` reads the Debian package directly in Python.
+
+It extracts metadata from the package control archive without requiring `dpkg-deb`.
 
 Example output:
 
@@ -228,21 +264,32 @@ URL          : https://forge.example.com/api/packages/Software/debian/pool/lenny
 ✓ Debian package published successfully.
 ```
 
+### Supported control archive formats
+
+The Debian metadata reader supports:
+
+```text
+control.tar
+control.tar.gz
+control.tar.xz
+control.tar.zst
+control.tar.bz2
+control.tar.lzma
+```
+
+The package is read sequentially and the potentially large `data.tar.*` payload does not need to be loaded into memory to extract package metadata.
+
+---
+
+## Distribution
+
 The default distribution is:
 
 ```text
 lenny
 ```
 
-The default component is:
-
-```text
-main
-```
-
-Both can be overridden.
-
-### Distribution
+Override it with:
 
 ```bash
 forge-publish deb package.deb \
@@ -255,7 +302,17 @@ Short option:
 forge-publish deb package.deb -d bookworm
 ```
 
-### Component
+---
+
+## Component
+
+The default component is:
+
+```text
+main
+```
+
+Override it with:
 
 ```bash
 forge-publish deb package.deb \
@@ -268,7 +325,9 @@ Short option:
 forge-publish deb package.deb -c main
 ```
 
-### Example
+---
+
+## Complete example
 
 ```bash
 forge-publish deb servcli_1.9.3-0_i386.deb \
@@ -290,13 +349,13 @@ Generic packages are useful for files that do not belong to a specific package e
 
 Examples include:
 
-* `.zip`
-* `.tar.gz`
-* binaries
-* firmware
-* installers
-* documentation archives
-* custom distribution files
+- `.zip`
+- `.tar.gz`
+- binaries
+- firmware
+- installers
+- documentation archives
+- custom distribution files
 
 ## Publish a Generic package
 
@@ -306,17 +365,37 @@ forge-publish generic servcli.tar.gz \
     --version 1.9.3
 ```
 
-This publishes the file to:
+This publishes the file to an endpoint such as:
 
 ```text
 /api/packages/Software/generic/servcli/1.9.3/servcli.tar.gz
 ```
 
-### Specify the stored filename
+The package name and stored filename are validated before publication.
 
-By default, the original filename is used.
+Allowed characters are:
 
-You can override it:
+```text
+A-Z
+a-z
+0-9
+.
+-
++
+_
+```
+
+The version must be non-empty and must not contain leading or trailing whitespace.
+
+URL path components are percent-encoded when required.
+
+---
+
+## Specify the stored filename
+
+By default, the source filename is used.
+
+It can be overridden:
 
 ```bash
 forge-publish generic firmware.bin \
@@ -325,7 +404,7 @@ forge-publish generic firmware.bin \
     --filename firmware-linux.bin
 ```
 
-The Forgejo API endpoint is:
+The Forgejo endpoint is:
 
 ```text
 PUT /api/packages/{owner}/generic/{package}/{version}/{filename}
@@ -335,7 +414,7 @@ PUT /api/packages/{owner}/generic/{package}/{version}/{filename}
 
 # NPM packages
 
-NPM publication uses the standard `npm publish` command and Forgejo's NPM registry.
+NPM publication uses the standard `npm publish` command with Forgejo's NPM registry.
 
 ## Publish a package
 
@@ -345,21 +424,21 @@ Go to the directory containing `package.json`:
 cd my-package
 ```
 
-Then:
+Then run:
 
 ```bash
 forge-publish npm
 ```
 
-Or specify the directory:
+Or specify the directory explicitly:
 
 ```bash
 forge-publish npm ./my-package
 ```
 
-The CLI reads `package.json` and displays the package name and version before publication.
+`forge-publish` reads `package.json` and validates that a package name and version are present.
 
-Example:
+Example output:
 
 ```text
 NPM package
@@ -377,13 +456,28 @@ The Forgejo NPM registry endpoint is:
 /api/packages/{owner}/npm/
 ```
 
-The actual publication is performed using:
+---
 
-```bash
-npm publish
+## NPM authentication
+
+`forge-publish` creates a temporary `.npmrc` containing the Forgejo registry and authentication token.
+
+Conceptually:
+
+```ini
+registry=https://forge.example.com/api/packages/Software/npm/
+//forge.example.com/api/packages/Software/npm/:_authToken=<token>
 ```
 
-This means the project must have npm installed.
+The temporary configuration is passed explicitly to npm:
+
+```text
+npm publish --registry=<registry> --userconfig=<temporary .npmrc>
+```
+
+The `.npmrc` is created outside the project directory and removed automatically after publication.
+
+The authentication token is not passed directly as a command-line argument.
 
 ---
 
@@ -391,7 +485,13 @@ This means the project must have npm installed.
 
 All publishing commands support dry-run mode.
 
-Dry-run does not upload anything.
+Dry-run:
+
+- validates local package metadata
+- builds and displays the target Forgejo endpoint
+- does not upload anything
+- does not require a Forgejo token
+- does not access the system keyring
 
 ## Debian
 
@@ -432,53 +532,81 @@ forge-publish generic servcli.tar.gz \
 forge-publish npm --dry-run
 ```
 
-The dry-run mode is useful for checking the generated target before publishing.
+Example:
+
+```text
+NPM package
+-----------
+Name     : @software/my-package
+Version  : 1.2.3
+Registry : https://forge.example.com/api/packages/Software/npm/
+
+DRY RUN
+-------
+npm publish --registry=https://forge.example.com/api/packages/Software/npm/ --userconfig=<temporary .npmrc>
+```
 
 ---
 
-# Exit codes
+# Error handling
 
-The command returns a non-zero exit code when publication fails.
+`forge-publish` returns a non-zero exit code when configuration, validation, authentication, or publication fails.
 
-Typical errors include:
+Common Forgejo HTTP errors include:
 
-```text
-HTTP 401
-```
-
-Authentication failed.
+### HTTP 400
 
 ```text
-HTTP 403
+invalid package or request
 ```
 
-The authenticated user does not have permission to publish the package.
+### HTTP 401
 
 ```text
-HTTP 404
+authentication failed
 ```
 
-The Forgejo endpoint or package registry was not found.
+### HTTP 403
 
 ```text
-HTTP 409
+permission denied
 ```
 
-The package or file already exists.
+### HTTP 404
 
 ```text
-HTTP 400
+resource not found
 ```
 
-The package or request is invalid.
+### HTTP 409
 
-This allows `forge-publish` to be used safely from shell scripts and CI/CD pipelines.
+```text
+package/file already exists
+```
+
+### HTTP 413
+
+```text
+package/file is too large
+```
+
+### HTTP 429
+
+```text
+too many requests
+```
+
+Server-side `5xx` responses are reported as Forgejo server errors.
+
+Forgejo response messages are included when available and truncated when excessively large.
+
+HTTP requests use explicit connection and transfer timeouts to avoid hanging indefinitely.
 
 ---
 
 # Examples
 
-## Publish servcli
+## Publish a Debian package
 
 ```bash
 forge-publish deb servcli_1.9.3-0_i386.deb
@@ -519,38 +647,63 @@ forge-publish deb servcli_1.9.3-0_i386.deb --dry-run
 
 ```text
 forge-publish/
-├── pyproject.toml
-├── README.md
+├── .gitattributes
 ├── .gitignore
-└── src/
-    └── forge_publish/
-        ├── __init__.py
-        ├── __main__.py
-        ├── cli.py
-        ├── client.py
-        ├── config.py
-        └── publishers/
-            ├── __init__.py
-            ├── deb.py
-            ├── generic.py
-            └── npm.py
+├── README.md
+├── pyproject.toml
+├── src/
+│   └── forge_publish/
+│       ├── __init__.py
+│       ├── __main__.py
+│       ├── cli.py
+│       ├── client.py
+│       ├── config.py
+│       ├── errors.py
+│       └── publishers/
+│           ├── __init__.py
+│           ├── deb.py
+│           ├── generic.py
+│           └── npm.py
+└── tests/
+    ├── test_client.py
+    ├── test_config.py
+    ├── test_deb.py
+    ├── test_generic.py
+    └── test_npm.py
 ```
 
 ### `cli.py`
 
-Contains the command-line interface and commands.
+Defines the command-line interface and converts expected application errors into user-friendly CLI errors.
 
 ### `config.py`
 
-Handles the local Forgejo configuration.
+Handles:
+
+- Forgejo URL, owner, and username configuration
+- system keyring authentication
+- environment-variable authentication
+- legacy token migration
 
 ### `client.py`
 
 Provides the common HTTP client used to communicate with Forgejo.
 
+It handles:
+
+- authentication
+- uploads
+- deletes
+- HTTP timeouts
+- Forgejo HTTP error messages
+
+### `errors.py`
+
+Defines the expected application exception hierarchy.
+
 ### `publishers/`
 
-Contains the implementation for each package registry.
+Contains registry-specific publication logic:
 
 ```text
 publishers/
@@ -559,7 +712,9 @@ publishers/
 └── npm.py
 ```
 
-This structure makes it possible to add additional package formats later without changing the existing publishers.
+### `tests/`
+
+Contains unit tests for configuration, HTTP handling, Debian parsing, Generic publication, and NPM publication.
 
 ---
 
@@ -572,17 +727,34 @@ git clone <repository-url>
 cd forge-publish
 ```
 
-Create the development environment:
+Create a Python 3.14 virtual environment:
 
 ```bash
-python3 -m venv .venv
+python -m venv .venv
+```
+
+Activate it:
+
+```bash
 source .venv/bin/activate
 ```
 
-Install the project in editable mode:
+On Windows:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Install the project and development dependencies:
 
 ```bash
-pip install -e .
+python -m pip install -e ".[dev]"
+```
+
+Run the tests:
+
+```bash
+pytest
 ```
 
 Run the CLI directly:
@@ -613,14 +785,17 @@ publishers/
 └── rpm.py
 ```
 
-The new publisher should:
+A new publisher should generally:
 
-1. Validate the package.
-2. Extract package metadata when possible.
+1. Validate its input.
+2. Extract package metadata when appropriate.
 3. Build the Forgejo registry endpoint.
-4. Use the common Forgejo client.
+4. Use the common Forgejo client when using the HTTP API.
 5. Support dry-run mode.
-6. Report useful errors to the user.
+6. Raise application-specific errors for expected failures.
+7. Avoid exposing authentication credentials.
+
+No plugin or factory architecture is required for simple publisher additions.
 
 ---
 
@@ -630,21 +805,31 @@ The new publisher should:
 
 The project is not intended to replace package managers such as:
 
-* `apt`
-* `npm`
-* `pip`
-* `dnf`
-* `cargo`
+- `apt`
+- `npm`
+- `pip`
+- `dnf`
+- `cargo`
 
-Instead, it provides a convenient interface for publishing packages to a Forgejo instance.
+Instead, it provides a consistent interface for publishing packages to Forgejo.
 
-The main objective is to make package publication predictable:
+The main objective is to make publication predictable:
 
 ```text
 forge-publish <type> <package>
 ```
 
-without requiring users to remember Forgejo API URLs or manually construct `curl` commands.
+without requiring users to manually construct Forgejo API requests or registry-specific authentication configuration.
+
+The project favors:
+
+- simple modules
+- explicit behavior
+- minimal dependencies
+- useful errors
+- cross-platform operation
+- secure credential handling
+- easy extension without unnecessary abstractions
 
 ---
 
@@ -652,28 +837,14 @@ without requiring users to remember Forgejo API URLs or manually construct `curl
 
 The architecture can be extended to support additional Forgejo package registries, for example:
 
-* RPM
-* PyPI
-* Maven
-* Cargo
-* NuGet
-* Composer
-* Alpine
-* Go packages
-* Conan
+- RPM
+- PyPI
+- Maven
+- Cargo
+- NuGet
+- Composer
+- Alpine
+- Go packages
+- Conan
 
 These should be added as separate publishers rather than mixing registry-specific logic into the CLI.
-
----
-
-# License
-
-Add the project license here.
-
-For example:
-
-```text
-MIT License
-```
-
-or replace this section with the license used by your project.
