@@ -4,5 +4,13 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix]
+        stages: [pre-commit]
 
       - id: ruff-format
+        stages: [pre-commit]
+
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.18.0
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
