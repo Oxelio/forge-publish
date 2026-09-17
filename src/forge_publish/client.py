@@ -8,7 +8,6 @@ import requests
 from .config import Config
 from .errors import ForgePublishError
 
-
 REQUEST_TIMEOUT = (10, 300)
 MAX_ERROR_MESSAGE_LENGTH = 500
 
@@ -54,9 +53,7 @@ class ForgejoClient:
         except OSError as exc:
             raise ForgejoError(f"Unable to read file: {file}") from exc
         except requests.RequestException as exc:
-            raise ForgejoError(
-                f"HTTP request failed: {exc}"
-            ) from exc
+            raise ForgejoError(f"HTTP request failed: {exc}") from exc
 
         if 200 <= response.status_code < 300:
             return
@@ -84,9 +81,7 @@ class ForgejoClient:
                 timeout=REQUEST_TIMEOUT,
             )
         except requests.RequestException as exc:
-            raise ForgejoError(
-                f"HTTP request failed: {exc}"
-            ) from exc
+            raise ForgejoError(f"HTTP request failed: {exc}") from exc
 
         if response.status_code == 404 and ignore_404:
             return
@@ -146,6 +141,4 @@ class ForgejoClient:
         if message:
             reason += f": {message}"
 
-        raise ForgejoError(
-            f"HTTP {response.status_code}: {reason}"
-        )
+        raise ForgejoError(f"HTTP {response.status_code}: {reason}")

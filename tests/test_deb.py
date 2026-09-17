@@ -12,11 +12,7 @@ from forge_publish.publishers.deb import read_deb_metadata
 
 
 def _tar_control() -> bytes:
-    control = (
-        "Package: servcli\n"
-        "Version: 1.9.3-0\n"
-        "Architecture: i386\n"
-    ).encode()
+    control = b"Package: servcli\nVersion: 1.9.3-0\nArchitecture: i386\n"
 
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode="w") as archive:
@@ -28,13 +24,7 @@ def _tar_control() -> bytes:
 
 def _ar_member(name: str, data: bytes) -> bytes:
     header = (
-        f"{name + '/':<16}"
-        f"{0:<12}"
-        f"{0:<6}"
-        f"{0:<6}"
-        f"{0o100644:<8o}"
-        f"{len(data):<10}"
-        "`\n"
+        f"{name + '/':<16}{0:<12}{0:<6}{0:<6}{0o100644:<8o}{len(data):<10}`\n"
     ).encode("ascii")
     padding = b"\n" if len(data) % 2 else b""
     return header + data + padding

@@ -40,10 +40,7 @@ def test_npm_uses_temporary_userconfig(
         observed_npmrc = Path(userconfig)
         content = observed_npmrc.read_text(encoding="utf-8")
         assert "secret-token" in content
-        assert (
-            "//forge.example.com/api/packages/Software/npm/:_authToken="
-            in content
-        )
+        assert "//forge.example.com/api/packages/Software/npm/:_authToken=" in content
 
     monkeypatch.setattr(npm.subprocess, "run", fake_run)
 

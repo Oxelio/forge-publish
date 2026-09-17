@@ -7,7 +7,6 @@ from urllib.parse import quote
 from ..client import ForgejoClient
 from ..errors import PackageError
 
-
 GENERIC_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._+-]+$")
 
 

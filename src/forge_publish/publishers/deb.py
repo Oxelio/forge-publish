@@ -13,7 +13,6 @@ import zstandard
 from ..client import ForgejoClient
 from ..errors import PackageError
 
-
 AR_MAGIC = b"!<arch>\n"
 AR_HEADER_SIZE = 60
 AR_HEADER_TRAILER = b"`\n"
@@ -24,9 +23,7 @@ def _read_control_archive(file: Path) -> tuple[str, bytes]:
     try:
         with file.open("rb") as stream:
             if stream.read(len(AR_MAGIC)) != AR_MAGIC:
-                raise PackageError(
-                    f"{file.name} is not a valid Debian package."
-                )
+                raise PackageError(f"{file.name} is not a valid Debian package.")
 
             debian_binary_valid = False
             control_archive: tuple[str, bytes] | None = None
@@ -37,24 +34,29 @@ def _read_control_archive(file: Path) -> tuple[str, bytes]:
                     break
 
                 if len(header) != AR_HEADER_SIZE:
-                    raise PackageError(
-                        f"{file.name} contains a truncated ar archive."
-                    )
+                    raise PackageError(f"{file.name} contains a truncated ar archive.")
 
                 if header[58:60] != AR_HEADER_TRAILER:
-                    raise PackageError(
-                        f"{file.name} contains an invalid ar header."
+                    raise PackageError(f"{file.name} contains an invalid ar header.")
+
+                name = (
+                    header[0:16]
+                    .decode(
+                        "utf-8",
+                        errors="replace",
                     )
+                    .strip()
+                    .rstrip("/")
+                )
 
-                name = header[0:16].decode(
-                    "utf-8",
-                    errors="replace",
-                ).strip().rstrip("/")
-
-                size_text = header[48:58].decode(
-                    "ascii",
-                    errors="replace",
-                ).strip()
+                size_text = (
+                    header[48:58]
+                    .decode(
+                        "ascii",
+                        errors="replace",
+                    )
+                    .strip()
+                )
 
                 try:
                     size = int(size_text)
@@ -64,9 +66,7 @@ def _read_control_archive(file: Path) -> tuple[str, bytes]:
                     ) from exc
 
                 if size < 0:
-                    raise PackageError(
-                        f"Invalid ar member size in {file.name}."
-                    )
+                    raise PackageError(f"Invalid ar member size in {file.name}.")
 
                 if name == "debian-binary":
                     content = stream.read(size)
@@ -103,9 +103,7 @@ def _read_control_archive(file: Path) -> tuple[str, bytes]:
             f"{file.name} does not contain a valid debian-binary member."
         )
 
-    raise PackageError(
-        f"{file.name} does not contain a control archive."
-    )
+    raise PackageError(f"{file.name} does not contain a control archive.")
 
 
 def _decompress_control(data: bytes, filename: str) -> bytes:
@@ -117,9 +115,7 @@ def _decompress_control(data: bytes, filename: str) -> bytes:
         if filename.endswith(".xz"):
             return lzma.decompress(data)
         if filename.endswith(".zst"):
-            with zstandard.ZstdDecompressor().stream_reader(
-                io.BytesIO(data)
-            ) as reader:
+            with zstandard.ZstdDecompressor().stream_reader(io.BytesIO(data)) as reader:
                 return reader.read()
         if filename.endswith(".bz2"):
             return bz2.decompress(data)
@@ -130,9 +126,7 @@ def _decompress_control(data: bytes, filename: str) -> bytes:
             f"Unable to decompress Debian control archive: {filename}"
         ) from exc
 
-    raise PackageError(
-        f"Unsupported control archive format: {filename}"
-    )
+    raise PackageError(f"Unsupported control archive format: {filename}")
 
 
 def _parse_control(data: bytes) -> dict[str, str]:
@@ -187,24 +181,18 @@ def read_deb_metadata(file: Path) -> dict[str, str]:
 
             extracted = archive.extractfile(control_file)
             if extracted is None:
-                raise PackageError(
-                    f"Unable to read control file from {file.name}."
-                )
+                raise PackageError(f"Unable to read control file from {file.name}.")
 
             control_data = extracted.read()
     except tarfile.TarError as exc:
-        raise PackageError(
-            f"Invalid control archive in {file.name}."
-        ) from exc
+        raise PackageError(f"Invalid control archive in {file.name}.") from exc
 
     control = _parse_control(control_data)
     required = ("Package", "Version", "Architecture")
     missing = [field for field in required if not control.get(field)]
 
     if missing:
-        raise PackageError(
-            "Missing Debian control fields: " + ", ".join(missing)
-        )
+        raise PackageError("Missing Debian control fields: " + ", ".join(missing))
 
     return {
         "name": control["Package"],

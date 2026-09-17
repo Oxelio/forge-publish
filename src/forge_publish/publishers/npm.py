@@ -16,21 +16,15 @@ def read_package_json(directory: Path) -> dict[str, object]:
     package_json = directory / "package.json"
 
     if not package_json.exists():
-        raise PackageError(
-            f"package.json not found in {directory}"
-        )
+        raise PackageError(f"package.json not found in {directory}")
 
     try:
         with package_json.open(encoding="utf-8") as file:
             data = json.load(file)
     except json.JSONDecodeError as exc:
-        raise PackageError(
-            f"Invalid JSON in {package_json}."
-        ) from exc
+        raise PackageError(f"Invalid JSON in {package_json}.") from exc
     except OSError as exc:
-        raise PackageError(
-            f"Unable to read {package_json}."
-        ) from exc
+        raise PackageError(f"Unable to read {package_json}.") from exc
 
     if not isinstance(data, dict):
         raise PackageError("package.json must contain a JSON object.")
@@ -50,8 +44,7 @@ def _write_temporary_npmrc(
 ) -> Path:
     npmrc = directory / ".npmrc"
     npmrc.write_text(
-        f"registry={registry}\n"
-        f"{_npm_auth_key(registry)}={token}\n",
+        f"registry={registry}\n{_npm_auth_key(registry)}={token}\n",
         encoding="utf-8",
     )
 
@@ -73,20 +66,13 @@ def publish(
     version = package.get("version")
 
     if not isinstance(name, str) or not name.strip():
-        raise PackageError(
-            "package.json does not contain a valid 'name'."
-        )
+        raise PackageError("package.json does not contain a valid 'name'.")
 
     if not isinstance(version, str) or not version.strip():
-        raise PackageError(
-            "package.json does not contain a valid 'version'."
-        )
+        raise PackageError("package.json does not contain a valid 'version'.")
 
     owner = quote(client.config.owner, safe="")
-    registry = (
-        f"{client.config.url}"
-        f"/api/packages/{owner}/npm/"
-    )
+    registry = f"{client.config.url}/api/packages/{owner}/npm/"
 
     print()
     print("NPM package")
@@ -99,11 +85,7 @@ def publish(
         print()
         print("DRY RUN")
         print("-------")
-        print(
-            "npm publish "
-            f"--registry={registry} "
-            "--userconfig=<temporary .npmrc>"
-        )
+        print(f"npm publish --registry={registry} --userconfig=<temporary .npmrc>")
         return
 
     token = client.config.token
@@ -112,9 +94,7 @@ def publish(
 
     npm_executable = shutil.which("npm")
     if npm_executable is None:
-        raise PackageError(
-            "npm is not installed or not available in PATH."
-        )
+        raise PackageError("npm is not installed or not available in PATH.")
 
     try:
         with tempfile.TemporaryDirectory(

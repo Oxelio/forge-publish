@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from forge_publish.client import ForgejoClient, REQUEST_TIMEOUT
+from forge_publish.client import REQUEST_TIMEOUT, ForgejoClient
 from forge_publish.config import Config
 
 

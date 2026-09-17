@@ -1,8 +1,10 @@
 from pathlib import Path
+
 import pytest
 
 from forge_publish import config as config_module
 from forge_publish.errors import ConfigurationError
+
 
 @pytest.mark.parametrize(
     "url",
@@ -11,10 +13,10 @@ from forge_publish.errors import ConfigurationError
         "https://forge.example.com#fragment",
     ],
 )
-
 def test_rejects_url_query_and_fragment(url: str) -> None:
     with pytest.raises(ConfigurationError):
         config_module._normalize_url(url)
+
 
 def test_environment_token_has_priority(
     tmp_path: Path,
@@ -22,9 +24,7 @@ def test_environment_token_has_priority(
 ) -> None:
     config_file = tmp_path / "config.toml"
     config_file.write_text(
-        'url = "https://forge.example.com"\n'
-        'owner = "Software"\n'
-        'username = "user"\n',
+        'url = "https://forge.example.com"\nowner = "Software"\nusername = "user"\n',
         encoding="utf-8",
     )
 
@@ -48,9 +48,7 @@ def test_load_config_without_token_does_not_access_keyring(
 ) -> None:
     config_file = tmp_path / "config.toml"
     config_file.write_text(
-        'url = "https://forge.example.com"\n'
-        'owner = "Software"\n'
-        'username = "user"\n',
+        'url = "https://forge.example.com"\nowner = "Software"\nusername = "user"\n',
         encoding="utf-8",
     )
 
@@ -66,6 +64,7 @@ def test_load_config_without_token_does_not_access_keyring(
 
     assert config.token is None
 
+
 def test_config_repr_does_not_expose_token() -> None:
     config = config_module.Config(
         url="https://forge.example.com",
@@ -75,6 +74,7 @@ def test_config_repr_does_not_expose_token() -> None:
     )
 
     assert "secret-token" not in repr(config)
+
 
 def test_config_save_writes_configuration(
     tmp_path: Path,
@@ -108,4 +108,3 @@ def test_config_save_writes_configuration(
     assert 'owner = "Software"' in content
     assert 'username = "user"' in content
     assert "secret-token" not in content
-
