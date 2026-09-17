@@ -197,15 +197,16 @@ def configure(
     if not config.username:
         raise ConfigurationError("Forgejo username cannot be empty.")
 
-    config.save()
-
     if os.environ.get(TOKEN_ENV_VAR):
+        config.save()
+
         print(f"Configuration saved to {CONFIG_FILE}")
         print(f"Forgejo token provided through {TOKEN_ENV_VAR}.")
         return
 
     token = _prompt_token()
     _set_keyring_token(config, token)
+    config.save()
 
     print(f"Configuration saved to {CONFIG_FILE}")
     print("Forgejo token stored in the system keyring.")
