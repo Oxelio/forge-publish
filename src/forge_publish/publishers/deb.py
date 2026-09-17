@@ -17,6 +17,9 @@ from ..errors import PackageError
 AR_MAGIC = b"!<arch>\n"
 AR_HEADER_SIZE = 60
 AR_HEADER_TRAILER = b"`\n"
+MAX_CONTROL_ARCHIVE_COMPRESSED_SIZE = 8 * 1024 * 1024
+MAX_CONTROL_ARCHIVE_SIZE = 16 * 1024 * 1024
+MAX_CONTROL_FILE_SIZE = 1 * 1024 * 1024
 
 
 def _is_control_archive(name: str) -> bool:
@@ -102,6 +105,21 @@ def _consume_ar_padding(
         raise PackageError(f"{filename} contains a truncated ar archive.")
 
 
+def _read_control_archive_member(
+    stream: BinaryIO,
+    size: int,
+    filename: str,
+) -> bytes:
+    if size > MAX_CONTROL_ARCHIVE_COMPRESSED_SIZE:
+        raise PackageError(f"Debian control archive is too large in {filename}.")
+
+    return _read_ar_member(
+        stream,
+        size,
+        filename,
+    )
+
+
 def _read_control_archive(
     file: Path,
 ) -> tuple[str, bytes]:
@@ -134,7 +152,7 @@ def _read_control_archive(
                     debian_binary_valid = content.strip() == b"2.0"
 
                 elif _is_control_archive(name):
-                    content = _read_ar_member(
+                    content = _read_control_archive_member(
                         stream,
                         size,
                         file.name,
@@ -164,22 +182,71 @@ def _read_control_archive(
     raise PackageError(f"{file.name} does not contain a control archive.")
 
 
+def _read_limited(
+    stream: BinaryIO,
+    limit: int,
+    filename: str,
+) -> bytes:
+    data = stream.read(limit + 1)
+
+    if len(data) > limit:
+        raise PackageError(
+            f"Decompressed Debian control archive is too large: {filename}"
+        )
+
+    return data
+
+
 def _decompress_control(data: bytes, filename: str) -> bytes:
     try:
         if filename == "control.tar":
+            if len(data) > MAX_CONTROL_ARCHIVE_SIZE:
+                raise PackageError(f"Debian control archive is too large: {filename}")
+
             return data
+
+        source = io.BytesIO(data)
+
         if filename.endswith(".gz"):
-            return gzip.decompress(data)
-        if filename.endswith(".xz"):
-            return lzma.decompress(data)
-        if filename.endswith(".zst"):
-            with zstandard.ZstdDecompressor().stream_reader(io.BytesIO(data)) as reader:
-                return reader.read()
+            with gzip.GzipFile(fileobj=source, mode="rb") as stream:
+                return _read_limited(
+                    stream,
+                    MAX_CONTROL_ARCHIVE_SIZE,
+                    filename,
+                )
+
+        if filename.endswith((".xz", ".lzma")):
+            with lzma.LZMAFile(source, mode="rb") as stream:
+                return _read_limited(
+                    stream,
+                    MAX_CONTROL_ARCHIVE_SIZE,
+                    filename,
+                )
+
         if filename.endswith(".bz2"):
-            return bz2.decompress(data)
-        if filename.endswith(".lzma"):
-            return lzma.decompress(data)
-    except (OSError, lzma.LZMAError, zstandard.ZstdError) as exc:
+            with bz2.BZ2File(source, mode="rb") as stream:
+                return _read_limited(
+                    stream,
+                    MAX_CONTROL_ARCHIVE_SIZE,
+                    filename,
+                )
+
+        if filename.endswith(".zst"):
+            with zstandard.ZstdDecompressor().stream_reader(source) as stream:
+                return _read_limited(
+                    stream,
+                    MAX_CONTROL_ARCHIVE_SIZE,
+                    filename,
+                )
+
+    except PackageError:
+        raise
+    except (
+        OSError,
+        EOFError,
+        lzma.LZMAError,
+        zstandard.ZstdError,
+    ) as exc:
         raise PackageError(
             f"Unable to decompress Debian control archive: {filename}"
         ) from exc
@@ -250,11 +317,17 @@ def read_deb_metadata(file: Path) -> dict[str, str]:
                     f"{file.name} does not contain a regular control file."
                 )
 
+            if control_file.size > MAX_CONTROL_FILE_SIZE:
+                raise PackageError(f"Debian control file is too large in {file.name}.")
+
             extracted = archive.extractfile(control_file)
             if extracted is None:
                 raise PackageError(f"Unable to read control file from {file.name}.")
 
-            control_data = extracted.read()
+            control_data = extracted.read(MAX_CONTROL_FILE_SIZE + 1)
+
+            if len(control_data) > MAX_CONTROL_FILE_SIZE:
+                raise PackageError(f"Debian control file is too large in {file.name}.")
     except tarfile.TarError as exc:
         raise PackageError(f"Invalid control archive in {file.name}.") from exc
 

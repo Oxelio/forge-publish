@@ -1,3 +1,4 @@
+import bz2
 import gzip
 import io
 import lzma
@@ -43,10 +44,17 @@ def _tar_control(
 
 
 def _ar_member(name: str, data: bytes) -> bytes:
+    if len(name) > 16:
+        raise ValueError("ar member name is too long")
+
+    member_name = f"{name}/" if len(name) < 16 else name
+
     header = (
-        f"{name + '/':<16}{0:<12}{0:<6}{0:<6}{0o100644:<8o}{len(data):<10}`\n"
+        f"{member_name:<16}{0:<12}{0:<6}{0:<6}{0o100644:<8o}{len(data):<10}`\n"
     ).encode("ascii")
+
     padding = b"\n" if len(data) % 2 else b""
+
     return header + data + padding
 
 
@@ -68,6 +76,11 @@ def _write_deb(path: Path, control_name: str, control_data: bytes) -> None:
         (
             "control.tar.zst",
             lambda data: zstandard.ZstdCompressor().compress(data),
+        ),
+        ("control.tar.bz2", bz2.compress),
+        (
+            "control.tar.lzma",
+            lambda data: lzma.compress(data, format=lzma.FORMAT_ALONE),
         ),
     ],
 )
@@ -151,3 +164,26 @@ def test_debian_publish_rejects_unsafe_path_segments(
             distribution=distribution,
             component=component,
         )
+
+
+def test_rejects_oversized_decompressed_control_archive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    package = tmp_path / "oversized.deb"
+
+    monkeypatch.setattr(
+        "forge_publish.publishers.deb.MAX_CONTROL_ARCHIVE_SIZE",
+        128,
+    )
+
+    oversized = b"x" * 1024
+
+    _write_deb(
+        package,
+        "control.tar.gz",
+        gzip.compress(oversized),
+    )
+
+    with pytest.raises(PackageError, match="too large"):
+        read_deb_metadata(package)
