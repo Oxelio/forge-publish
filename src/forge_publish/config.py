@@ -70,7 +70,7 @@ def _normalize_url(url: str) -> str:
     normalized = url.strip().rstrip("/")
     parsed = urlsplit(normalized)
 
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.query or parsed.fragment:
         raise ConfigurationError(
             "Forgejo URL must be a valid http:// or https:// URL."
         )
