@@ -19,6 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "pytest-cov>=7",
 ]
 
 [project.scripts]
@@ -30,3 +31,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+addopts = [
+    "--cov=forge_publish",
+    "--cov-branch",
+    "--cov-report=term-missing",
+]
