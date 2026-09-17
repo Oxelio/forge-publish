@@ -1,7 +1,20 @@
 from pathlib import Path
+import pytest
 
 from forge_publish import config as config_module
+from forge_publish.errors import ConfigurationError
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://forge.example.com?foo=bar",
+        "https://forge.example.com#fragment",
+    ],
+)
+
+def test_rejects_url_query_and_fragment(url: str) -> None:
+    with pytest.raises(ConfigurationError):
+        config_module._normalize_url(url)
 
 def test_environment_token_has_priority(
     tmp_path: Path,
@@ -62,3 +75,37 @@ def test_config_repr_does_not_expose_token() -> None:
     )
 
     assert "secret-token" not in repr(config)
+
+def test_config_save_writes_configuration(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_file = tmp_path / "config.toml"
+
+    monkeypatch.setattr(
+        config_module,
+        "CONFIG_DIR",
+        tmp_path,
+    )
+    monkeypatch.setattr(
+        config_module,
+        "CONFIG_FILE",
+        config_file,
+    )
+
+    config = config_module.Config(
+        url="https://forge.example.com",
+        owner="Software",
+        username="user",
+        token="secret-token",
+    )
+
+    config.save()
+
+    content = config_file.read_text(encoding="utf-8")
+
+    assert 'url = "https://forge.example.com"' in content
+    assert 'owner = "Software"' in content
+    assert 'username = "user"' in content
+    assert "secret-token" not in content
+

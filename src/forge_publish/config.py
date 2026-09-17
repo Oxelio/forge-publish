@@ -35,16 +35,6 @@ class Config:
         return f"{self.url}|{self.owner}|{self.username}"
 
     def save(self) -> None:
-        try:
-            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-
-            with CONFIG_FILE.open("wb") as file:
-                file.write(tomli_w.dumps(data).encode("utf-8"))
-        except OSError as exc:
-            raise ConfigurationError(
-                f"Unable to write configuration file: {CONFIG_FILE}"
-            ) from exc
-
         data = {
             "url": self.url,
             "owner": self.owner,
@@ -52,15 +42,21 @@ class Config:
         }
 
         try:
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
             with CONFIG_FILE.open("wb") as file:
-                file.write(tomli_w.dumps(data).encode("utf-8"))
+                file.write(
+                    tomli_w.dumps(data).encode("utf-8")
+                )
         except OSError as exc:
             raise ConfigurationError(
                 f"Unable to write configuration file: {CONFIG_FILE}"
             ) from exc
 
         try:
-            CONFIG_FILE.chmod(stat.S_IRUSR | stat.S_IWUSR)
+            CONFIG_FILE.chmod(
+                stat.S_IRUSR | stat.S_IWUSR
+            )
         except OSError:
             # Permissions are best-effort and vary across platforms.
             pass
