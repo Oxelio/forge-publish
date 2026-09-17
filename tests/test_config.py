@@ -52,3 +52,13 @@ def test_load_config_without_token_does_not_access_keyring(
     config = config_module.load_config(require_token=False)
 
     assert config.token is None
+
+def test_config_repr_does_not_expose_token() -> None:
+    config = config_module.Config(
+        url="https://forge.example.com",
+        owner="Software",
+        username="user",
+        token="secret-token",
+    )
+
+    assert "secret-token" not in repr(config)

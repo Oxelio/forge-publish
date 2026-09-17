@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from getpass import getpass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -28,7 +28,7 @@ class Config:
     url: str
     owner: str
     username: str
-    token: str | None = None
+    token: str | None = field(default=None, repr=False)
 
     @property
     def credential_name(self) -> str:
