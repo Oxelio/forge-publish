@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from keyring.errors import KeyringError
 
 from forge_publish import config as config_module
 from forge_publish.errors import ConfigurationError
@@ -108,3 +109,36 @@ def test_config_save_writes_configuration(
     assert 'owner = "Software"' in content
     assert 'username = "user"' in content
     assert "secret-token" not in content
+
+
+def test_keyring_error_falls_back_to_prompt(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        'url = "https://forge.example.com"\nowner = "Software"\nusername = "user"\n',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(config_module, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(config_module, "CONFIG_FILE", config_file)
+    monkeypatch.delenv("FORGE_PUBLISH_TOKEN", raising=False)
+
+    def fail(*args):
+        raise KeyringError("keyring unavailable")
+
+    monkeypatch.setattr(
+        config_module.keyring,
+        "get_password",
+        fail,
+    )
+    monkeypatch.setattr(
+        config_module,
+        "_prompt_token",
+        lambda: "prompt-token",
+    )
+
+    config = config_module.load_config()
+
+    assert config.token == "prompt-token"

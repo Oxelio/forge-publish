@@ -11,10 +11,29 @@ GENERIC_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._+-]+$")
 
 
 def _validate_name(value: str, field: str) -> None:
+    if value in {".", ".."}:
+        raise PackageError(
+            f"Invalid {field}: {value!r}. Path traversal segments are not allowed."
+        )
+
     if not GENERIC_NAME_PATTERN.fullmatch(value):
         raise PackageError(
             f"Invalid {field}: {value!r}. Allowed characters are "
             "A-Z, a-z, 0-9, '.', '-', '+', and '_'."
+        )
+
+
+def _validate_version(version: str) -> None:
+    if not version or version != version.strip():
+        raise PackageError(
+            "Package version must be non-empty and must not have "
+            "leading or trailing whitespace."
+        )
+
+    if version in {".", ".."}:
+        raise PackageError(
+            f"Invalid package version: {version!r}. "
+            "Path traversal segments are not allowed."
         )
 
 
@@ -30,6 +49,7 @@ def publish(
         filename = file.name
 
     _validate_name(package_name, "package name")
+    _validate_version(version)
     _validate_name(filename, "filename")
 
     if not version or version != version.strip():
