@@ -52,12 +52,6 @@ def publish(
     _validate_version(version)
     _validate_name(filename, "filename")
 
-    if not version or version != version.strip():
-        raise PackageError(
-            "Package version must be non-empty and must not have "
-            "leading or trailing whitespace."
-        )
-
     owner = quote(client.config.owner, safe="")
     encoded_package = quote(package_name, safe="")
     encoded_version = quote(version, safe="")
