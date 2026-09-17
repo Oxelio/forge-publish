@@ -35,7 +35,7 @@ def test_environment_token_has_priority(
     monkeypatch.setattr(
         config_module.keyring,
         "get_password",
-        lambda *args: "keyring-token",
+        lambda *_: "keyring-token",
     )
 
     config = config_module.load_config()
@@ -56,7 +56,7 @@ def test_load_config_without_token_does_not_access_keyring(
     monkeypatch.setattr(config_module, "CONFIG_DIR", tmp_path)
     monkeypatch.setattr(config_module, "CONFIG_FILE", config_file)
 
-    def fail(*args):
+    def fail(*_):
         raise AssertionError("keyring should not be accessed")
 
     monkeypatch.setattr(config_module.keyring, "get_password", fail)
@@ -125,7 +125,7 @@ def test_keyring_error_falls_back_to_prompt(
     monkeypatch.setattr(config_module, "CONFIG_FILE", config_file)
     monkeypatch.delenv("FORGE_PUBLISH_TOKEN", raising=False)
 
-    def fail(*args):
+    def fail(*_):
         raise KeyringError("keyring unavailable")
 
     monkeypatch.setattr(
@@ -142,3 +142,15 @@ def test_keyring_error_falls_back_to_prompt(
     config = config_module.load_config()
 
     assert config.token == "prompt-token"
+
+
+@pytest.mark.parametrize(
+    "owner",
+    [
+        ".",
+        "..",
+    ],
+)
+def test_rejects_unsafe_owner(owner: str) -> None:
+    with pytest.raises(ConfigurationError, match="owner"):
+        config_module._normalize_owner(owner)
