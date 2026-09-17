@@ -170,11 +170,6 @@ def load_config(*, require_token: bool = True) -> Config:
     if not require_token:
         return config
 
-    legacy_token = data.get("token")
-    if isinstance(legacy_token, str) and legacy_token:
-        _set_keyring_token(config, legacy_token)
-        config.save()
-
     token = os.environ.get(TOKEN_ENV_VAR)
     if not token:
         token = _get_keyring_token(config)
