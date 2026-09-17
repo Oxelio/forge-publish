@@ -154,3 +154,48 @@ def test_keyring_error_falls_back_to_prompt(
 def test_rejects_unsafe_owner(owner: str) -> None:
     with pytest.raises(ConfigurationError, match="owner"):
         config_module._normalize_owner(owner)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://forge.example.com",
+        "https://user:password@forge.example.com",
+    ],
+)
+def test_rejects_insecure_url(url: str) -> None:
+    with pytest.raises(ConfigurationError):
+        config_module._normalize_url(url)
+
+
+def test_configure_does_not_use_keyring_with_environment_token(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_file = tmp_path / "config.toml"
+
+    monkeypatch.setattr(config_module, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(config_module, "CONFIG_FILE", config_file)
+    monkeypatch.setenv("FORGE_PUBLISH_TOKEN", "env-token")
+
+    def fail(*_):
+        raise AssertionError("keyring should not be accessed")
+
+    monkeypatch.setattr(
+        config_module,
+        "_set_keyring_token",
+        fail,
+    )
+    monkeypatch.setattr(
+        config_module,
+        "_prompt_token",
+        fail,
+    )
+
+    config_module.configure(
+        url="https://forge.example.com",
+        owner="Software",
+        username="user",
+    )
+
+    assert config_file.exists()

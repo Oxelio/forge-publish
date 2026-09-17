@@ -72,12 +72,17 @@ def _normalize_url(url: str) -> str:
     parsed = urlsplit(normalized)
 
     if (
-        parsed.scheme not in {"http", "https"}
-        or not parsed.netloc
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
         or parsed.query
         or parsed.fragment
     ):
-        raise ConfigurationError("Forgejo URL must be a valid http:// or https:// URL.")
+        raise ConfigurationError(
+            "Forgejo URL must be a valid HTTPS URL without "
+            "credentials, query parameters, or fragments."
+        )
 
     return normalized
 
@@ -192,9 +197,15 @@ def configure(
     if not config.username:
         raise ConfigurationError("Forgejo username cannot be empty.")
 
+    config.save()
+
+    if os.environ.get(TOKEN_ENV_VAR):
+        print(f"Configuration saved to {CONFIG_FILE}")
+        print(f"Forgejo token provided through {TOKEN_ENV_VAR}.")
+        return
+
     token = _prompt_token()
     _set_keyring_token(config, token)
-    config.save()
 
     print(f"Configuration saved to {CONFIG_FILE}")
     print("Forgejo token stored in the system keyring.")
