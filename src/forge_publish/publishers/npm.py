@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 from ..client import ForgejoClient
+from ..config import TOKEN_ENV_VAR
 from ..errors import PackageError
 
 
@@ -43,6 +44,7 @@ def _write_temporary_npmrc(
     token: str,
 ) -> Path:
     npmrc = directory / ".npmrc"
+
     npmrc.write_text(
         f"registry={registry}\n{_npm_auth_key(registry)}={token}\n",
         encoding="utf-8",
@@ -51,6 +53,7 @@ def _write_temporary_npmrc(
     try:
         os.chmod(npmrc, 0o600)
     except OSError:
+        # Permissions are best-effort and vary across platforms.
         pass
 
     return npmrc
@@ -62,6 +65,7 @@ def publish(
     dry_run: bool = False,
 ) -> None:
     package = read_package_json(directory)
+
     name = package.get("name")
     version = package.get("version")
 
@@ -89,10 +93,12 @@ def publish(
         return
 
     token = client.config.token
+
     if not token:
         raise PackageError("No Forgejo token configured.")
 
     npm_executable = shutil.which("npm")
+
     if npm_executable is None:
         raise PackageError("npm is not installed or not available in PATH.")
 
@@ -106,6 +112,9 @@ def publish(
                 token,
             )
 
+            environment = os.environ.copy()
+            environment.pop(TOKEN_ENV_VAR, None)
+
             subprocess.run(
                 [
                     npm_executable,
@@ -115,11 +124,14 @@ def publish(
                 ],
                 cwd=directory,
                 check=True,
+                env=environment,
             )
+
     except OSError as exc:
         raise PackageError(
             "Unable to create or use the temporary npm configuration."
         ) from exc
+
     except subprocess.CalledProcessError as exc:
         raise PackageError(
             f"npm publish failed with exit code {exc.returncode}"
