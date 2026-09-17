@@ -35,7 +35,15 @@ class Config:
         return f"{self.url}|{self.owner}|{self.username}"
 
     def save(self) -> None:
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+            with CONFIG_FILE.open("wb") as file:
+                file.write(tomli_w.dumps(data).encode("utf-8"))
+        except OSError as exc:
+            raise ConfigurationError(
+                f"Unable to write configuration file: {CONFIG_FILE}"
+            ) from exc
 
         data = {
             "url": self.url,
