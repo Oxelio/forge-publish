@@ -79,7 +79,7 @@ def _normalize_url(url: str) -> str:
     parsed = urlsplit(normalized)
 
     try:
-        parsed.port
+        _port = parsed.port
     except ValueError as exc:
         raise ConfigurationError(
             "Forgejo URL must be a valid HTTPS URL without "
