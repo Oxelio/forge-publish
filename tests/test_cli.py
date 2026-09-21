@@ -202,7 +202,7 @@ def test_deb_requires_component(
     assert "Missing option '--component'" in result.output
 
 
-def test_generic_uses_source_filename_when_filename_is_omitted(
+def test_generic_command_passes_none_when_filename_is_omitted(
     tmp_path: Path,
     monkeypatch,
 ) -> None:

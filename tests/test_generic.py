@@ -90,3 +90,25 @@ def test_generic_rejects_unsafe_path_segments(
             filename=filename,
             dry_run=False,
         )
+
+
+def test_generic_uses_source_filename_when_filename_is_none(
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "firmware.bin"
+    package.write_bytes(b"data")
+    client = FakeClient()
+
+    generic.publish(
+        client=client,
+        file=package,
+        package_name="firmware",
+        version="1.0.0",
+        filename=None,
+        dry_run=False,
+    )
+
+    assert client.uploaded_url == (
+        "https://forge.example.com/api/packages/Software/generic/"
+        "firmware/1.0.0/firmware.bin"
+    )
