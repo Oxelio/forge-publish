@@ -242,9 +242,7 @@ def test_response_message_falls_back_to_text() -> None:
 def test_response_message_truncates_long_messages() -> None:
     message = "x" * (MAX_ERROR_MESSAGE_LENGTH + 10)
 
-    result = ForgejoClient._response_message(
-        Response(payload={"message": message})
-    )
+    result = ForgejoClient._response_message(Response(payload={"message": message}))
 
     assert result == "x" * MAX_ERROR_MESSAGE_LENGTH + "..."
 

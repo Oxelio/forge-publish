@@ -291,9 +291,7 @@ def _parse_control(data: bytes) -> dict[str, str]:
             raise PackageError("Invalid Debian control file: malformed field name.")
 
         if key in result:
-            raise PackageError(
-                f"Invalid Debian control file: duplicate field {key!r}."
-            )
+            raise PackageError(f"Invalid Debian control file: duplicate field {key!r}.")
 
         result[key] = value
         current_key = key

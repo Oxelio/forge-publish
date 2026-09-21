@@ -201,12 +201,7 @@ def test_rejects_oversized_decompressed_control_archive(
             b"Version: 1.9.3-0\n"
             b"Architecture: i386\n"
         ),
-        (
-            b"Package: servcli\n"
-            b"\n"
-            b"Version: 1.9.3-0\n"
-            b"Architecture: i386\n"
-        ),
+        (b"Package: servcli\n\nVersion: 1.9.3-0\nArchitecture: i386\n"),
     ],
 )
 def test_rejects_malformed_debian_control(
