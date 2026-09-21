@@ -75,7 +75,7 @@ def test_generic_command_passes_insecure_to_client(
     def create_client(
         *,
         dry_run: bool,
-        insecure: bool = False,
+        insecure: bool,
     ):
         captured["dry_run"] = dry_run
         captured["insecure"] = insecure
@@ -125,7 +125,7 @@ def test_deb_command_passes_insecure_to_client(
     def create_client(
         *,
         dry_run: bool,
-        insecure: bool = False,
+        insecure: bool,
     ):
         captured["dry_run"] = dry_run
         captured["insecure"] = insecure
@@ -147,6 +147,10 @@ def test_deb_command_passes_insecure_to_client(
         [
             "deb",
             str(package),
+            "--distribution",
+            "lenny",
+            "--component",
+            "main",
             "--insecure",
         ],
     )
@@ -156,3 +160,114 @@ def test_deb_command_passes_insecure_to_client(
         "dry_run": False,
         "insecure": True,
     }
+
+
+def test_deb_requires_distribution(
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "package.deb"
+    package.write_bytes(b"data")
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "deb",
+            str(package),
+            "--component",
+            "main",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Missing option '--distribution'" in result.output
+
+
+def test_deb_requires_component(
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "package.deb"
+    package.write_bytes(b"data")
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "deb",
+            str(package),
+            "--distribution",
+            "lenny",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Missing option '--component'" in result.output
+
+
+def test_generic_command_passes_none_when_filename_is_omitted(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    package = tmp_path / "package.bin"
+    package.write_bytes(b"data")
+
+    captured: dict[str, object] = {}
+    client = object()
+
+    monkeypatch.setattr(
+        cli,
+        "_create_client",
+        lambda *, dry_run, insecure: client,
+    )
+
+    def publish(**kwargs) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr(
+        cli.generic,
+        "publish",
+        publish,
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "generic",
+            str(package),
+            "--package",
+            "example",
+            "--version",
+            "1.0.0",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["filename"] is None
+
+
+def test_npm_uses_current_directory_by_default(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+    client = object()
+
+    monkeypatch.setattr(
+        cli,
+        "_create_client",
+        lambda *, dry_run, insecure: client,
+    )
+
+    def publish(**kwargs) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr(
+        cli.npm,
+        "publish",
+        publish,
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["npm"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["directory"] == Path(".")

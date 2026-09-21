@@ -42,8 +42,9 @@ def publish(
     file: Path,
     package_name: str,
     version: str,
-    filename: str | None = None,
-    dry_run: bool = False,
+    filename: str | None,
+    *,
+    dry_run: bool,
 ) -> None:
     if filename is None:
         filename = file.name

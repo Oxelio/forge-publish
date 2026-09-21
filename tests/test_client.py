@@ -48,12 +48,13 @@ def test_dry_run_does_not_require_token(tmp_path: Path) -> None:
             url="https://forge.example.com",
             owner="Software",
             username="user",
-        )
+        ),
+        verify_tls=True,
     )
 
     client.upload(
-        "https://forge.example.com/upload",
-        package,
+        url="https://forge.example.com/upload",
+        file=package,
         dry_run=True,
     )
 
@@ -68,15 +69,17 @@ def test_upload_uses_timeout(tmp_path: Path) -> None:
             owner="Software",
             username="user",
             token="secret",
-        )
+        ),
+        verify_tls=True,
     )
 
     session = Session()
     client.session = session
 
     client.upload(
-        "https://forge.example.com/upload",
-        package,
+        url="https://forge.example.com/upload",
+        file=package,
+        dry_run=False,
     )
 
     assert session.timeout == REQUEST_TIMEOUT
@@ -93,7 +96,8 @@ def test_upload_reports_network_error(tmp_path: Path) -> None:
             owner="Software",
             username="user",
             token="secret",
-        )
+        ),
+        verify_tls=True,
     )
     client.session = FailingSession()
 
@@ -102,8 +106,9 @@ def test_upload_reports_network_error(tmp_path: Path) -> None:
         match="HTTP request failed: connection failed",
     ):
         client.upload(
-            "https://forge.example.com/upload",
-            package,
+            url="https://forge.example.com/upload",
+            file=package,
+            dry_run=False,
         )
 
 
@@ -127,8 +132,9 @@ def test_upload_disables_tls_verification(
     client.session = session
 
     client.upload(
-        "https://forge.example.com/upload",
-        package,
+        url="https://forge.example.com/upload",
+        file=package,
+        dry_run=False,
     )
 
     assert session.verify is False
@@ -149,7 +155,9 @@ def test_delete_disables_tls_verification() -> None:
     client.session = session
 
     client.delete(
-        "https://forge.example.com/package",
+        url="https://forge.example.com/package",
+        dry_run=False,
+        ignore_404=False,
     )
 
     assert session.verify is False

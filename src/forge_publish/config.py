@@ -166,7 +166,7 @@ def _prompt_token() -> str:
     return token
 
 
-def load_config(*, require_token: bool = True) -> Config:
+def load_config(*, require_token: bool) -> Config:
     data = _read_config_data()
     config = _build_config(data)
 

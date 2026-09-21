@@ -350,7 +350,8 @@ def publish(
     file: Path,
     distribution: str,
     component: str,
-    dry_run: bool = False,
+    *,
+    dry_run: bool,
 ) -> None:
     _validate_path_segment(distribution, "distribution")
     _validate_path_segment(component, "component")

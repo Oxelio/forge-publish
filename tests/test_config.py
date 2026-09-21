@@ -38,7 +38,7 @@ def test_environment_token_has_priority(
         lambda *_: "keyring-token",
     )
 
-    config = config_module.load_config()
+    config = config_module.load_config(require_token=True)
 
     assert config.token == "env-token"
 
@@ -139,7 +139,7 @@ def test_keyring_error_falls_back_to_prompt(
         lambda: "prompt-token",
     )
 
-    config = config_module.load_config()
+    config = config_module.load_config(require_token=True)
 
     assert config.token == "prompt-token"
 

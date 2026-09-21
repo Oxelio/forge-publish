@@ -16,7 +16,13 @@ class FakeClient:
         )
         self.uploaded_url: str | None = None
 
-    def upload(self, url: str, file: Path, dry_run: bool = False) -> None:
+    def upload(
+        self,
+        url: str,
+        file: Path,
+        *,
+        dry_run: bool,
+    ) -> None:
         self.uploaded_url = url
 
 
@@ -31,6 +37,7 @@ def test_generic_builds_expected_url(tmp_path: Path) -> None:
         package_name="firmware",
         version="1.2.3+build 1",
         filename="firmware-linux.bin",
+        dry_run=False,
     )
 
     assert client.uploaded_url == (
@@ -49,6 +56,8 @@ def test_generic_rejects_invalid_package_name(tmp_path: Path) -> None:
             file=package,
             package_name="bad/name",
             version="1.0.0",
+            filename=None,
+            dry_run=False,
         )
 
 
@@ -79,4 +88,27 @@ def test_generic_rejects_unsafe_path_segments(
             package_name=package_name,
             version=version,
             filename=filename,
+            dry_run=False,
         )
+
+
+def test_generic_uses_source_filename_when_filename_is_none(
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "firmware.bin"
+    package.write_bytes(b"data")
+    client = FakeClient()
+
+    generic.publish(
+        client=client,
+        file=package,
+        package_name="firmware",
+        version="1.0.0",
+        filename=None,
+        dry_run=False,
+    )
+
+    assert client.uploaded_url == (
+        "https://forge.example.com/api/packages/Software/generic/"
+        "firmware/1.0.0/firmware.bin"
+    )
