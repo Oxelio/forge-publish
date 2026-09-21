@@ -11,7 +11,7 @@ class FailingSession:
     def __init__(self) -> None:
         self.auth = None
 
-    def put(self, url, data, timeout):
+    def put(self, url, data, timeout, verify):
         raise requests.ConnectionError("connection failed")
 
 
@@ -27,9 +27,16 @@ class Session:
     def __init__(self) -> None:
         self.auth = None
         self.timeout = None
+        self.verify = None
 
-    def put(self, url, data, timeout):
+    def put(self, url, data, timeout, verify):
         self.timeout = timeout
+        self.verify = verify
+        return Response()
+
+    def delete(self, url, timeout, verify):
+        self.timeout = timeout
+        self.verify = verify
         return Response()
 
 
@@ -54,6 +61,7 @@ def test_dry_run_does_not_require_token(tmp_path: Path) -> None:
 def test_upload_uses_timeout(tmp_path: Path) -> None:
     package = tmp_path / "package.bin"
     package.write_bytes(b"data")
+
     client = ForgejoClient(
         Config(
             url="https://forge.example.com",
@@ -62,12 +70,17 @@ def test_upload_uses_timeout(tmp_path: Path) -> None:
             token="secret",
         )
     )
+
     session = Session()
     client.session = session
 
-    client.upload("https://forge.example.com/upload", package)
+    client.upload(
+        "https://forge.example.com/upload",
+        package,
+    )
 
     assert session.timeout == REQUEST_TIMEOUT
+    assert session.verify is True
 
 
 def test_upload_reports_network_error(tmp_path: Path) -> None:
@@ -94,7 +107,12 @@ def test_upload_reports_network_error(tmp_path: Path) -> None:
         )
 
 
-def test_client_disables_tls_verification() -> None:
+def test_upload_disables_tls_verification(
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "package.bin"
+    package.write_bytes(b"data")
+
     client = ForgejoClient(
         Config(
             url="https://forge.example.com",
@@ -105,4 +123,33 @@ def test_client_disables_tls_verification() -> None:
         verify_tls=False,
     )
 
-    assert client.session.verify is False
+    session = Session()
+    client.session = session
+
+    client.upload(
+        "https://forge.example.com/upload",
+        package,
+    )
+
+    assert session.verify is False
+
+
+def test_delete_disables_tls_verification() -> None:
+    client = ForgejoClient(
+        Config(
+            url="https://forge.example.com",
+            owner="Software",
+            username="user",
+            token="secret",
+        ),
+        verify_tls=False,
+    )
+
+    session = Session()
+    client.session = session
+
+    client.delete(
+        "https://forge.example.com/package",
+    )
+
+    assert session.verify is False

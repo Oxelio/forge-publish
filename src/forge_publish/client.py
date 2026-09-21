@@ -24,8 +24,8 @@ class ForgejoClient:
         verify_tls: bool = True,
     ):
         self.config = config
+        self.verify_tls = verify_tls
         self.session = requests.Session()
-        self.session.verify = verify_tls
 
         if config.token:
             self.session.auth = (
@@ -60,6 +60,7 @@ class ForgejoClient:
                     url,
                     data=stream,
                     timeout=REQUEST_TIMEOUT,
+                    verify=self.verify_tls,
                 )
         except requests.RequestException as exc:
             raise ForgejoError(f"HTTP request failed: {exc}") from exc
@@ -90,6 +91,7 @@ class ForgejoClient:
             response = self.session.delete(
                 url,
                 timeout=REQUEST_TIMEOUT,
+                verify=self.verify_tls,
             )
         except requests.RequestException as exc:
             raise ForgejoError(f"HTTP request failed: {exc}") from exc
