@@ -2,13 +2,13 @@
 
 A small command-line interface (CLI) for publishing packages to a [Forgejo](https://forgejo.org/) package registry.
 
-`forge-publish` provides a single command-line tool for publishing different package types to Forgejo:
+`forge-publish` provides a consistent interface for publishing different package types to Forgejo:
 
 - Debian packages (`.deb`)
 - Generic packages (archives, binaries, firmware, etc.)
 - NPM packages
 
-The goal is to make package publication predictable without requiring users to remember Forgejo API URLs, authentication details, or `curl` commands.
+The goal is to make package publication explicit and predictable without requiring users to manually construct Forgejo API URLs, authentication configuration, or `curl` commands.
 
 ---
 
@@ -20,6 +20,7 @@ The goal is to make package publication predictable without requiring users to r
 - Store Forgejo connection settings locally
 - Store Forgejo tokens securely in the system keyring
 - Support `FORGE_PUBLISH_TOKEN` for CI/CD environments
+- Require publication-specific parameters explicitly
 - Dry-run mode without requiring authentication
 - Automatic Debian package metadata detection
 - Parse Debian packages without `dpkg-deb`
@@ -104,9 +105,11 @@ forge-publish --help
 
 ---
 
-## Configuration
+# Configuration
 
-Configure the Forgejo connection once:
+Forgejo connection settings must be configured explicitly before publishing packages.
+
+Run:
 
 ```bash
 forge-publish config
@@ -115,23 +118,22 @@ forge-publish config
 The command asks for:
 
 ```text
+Forgejo URL:
+Forgejo owner:
 Forgejo username:
 Forgejo token:
 ```
 
-The default Forgejo URL is:
+For example:
 
 ```text
-https://forge.fco.local
+Forgejo URL: https://forge.example.com
+Forgejo owner: Software
+Forgejo username: my-user
+Forgejo token:
 ```
 
-The default package owner is:
-
-```text
-Software
-```
-
-Both can be overridden:
+The configuration can also be supplied non-interactively:
 
 ```bash
 forge-publish config \
@@ -139,6 +141,8 @@ forge-publish config \
     --owner Software \
     --username my-user
 ```
+
+There are no built-in defaults for the Forgejo URL or package owner.
 
 The non-secret configuration is stored in:
 
@@ -162,7 +166,7 @@ username = "my-user"
 
 The Forgejo token is **not stored in `config.toml`**.
 
-It is stored separately in the operating system's credential store through the Python `keyring` package.
+It is stored separately in the operating system credential store through the Python `keyring` package.
 
 Depending on the platform, this typically uses facilities such as:
 
@@ -170,7 +174,7 @@ Depending on the platform, this typically uses facilities such as:
 - macOS Keychain
 - a supported Linux secret-service backend
 
-### Environment variable
+## Environment variable
 
 The Forgejo token can also be supplied through:
 
@@ -198,7 +202,7 @@ When no environment token is available, `forge-publish` checks the system keyrin
 
 ---
 
-## Security
+# Security
 
 Forgejo access tokens are secrets.
 
@@ -217,9 +221,9 @@ For CI/CD, prefer `FORGE_PUBLISH_TOKEN` through the CI platform's secret-managem
 
 If a token is accidentally exposed, revoke it and generate a new one.
 
-### TLS certificate verification
+## TLS certificate verification
 
-TLS certificate verification is enabled by default.
+TLS certificate verification is enabled during normal publication.
 
 For development environments or Forgejo instances using certificates that cannot be validated by the local trust store, Debian and Generic package publishing can explicitly disable TLS certificate verification with:
 
@@ -233,13 +237,17 @@ For example:
 forge-publish generic firmware.bin \
     --package firmware \
     --version 1.0.0 \
+    --filename firmware.bin \
     --insecure
 ```
 
 or:
 
 ```bash
-forge-publish deb package.deb --insecure
+forge-publish deb package.deb \
+    --distribution lenny \
+    --component main \
+    --insecure
 ```
 
 Using `--insecure` disables server certificate verification and therefore removes protection against man-in-the-middle attacks.
@@ -265,14 +273,28 @@ generic
 npm
 ```
 
+Publication-specific values are intentionally explicit rather than inferred from built-in defaults.
+
 ---
 
 # Debian packages
 
 ## Publish a Debian package
 
+A Debian publication requires both the target distribution and component:
+
 ```bash
-forge-publish deb servcli_1.9.3-0_i386.deb
+forge-publish deb servcli_1.9.3-0_i386.deb \
+    --distribution lenny \
+    --component main
+```
+
+Short options are also available:
+
+```bash
+forge-publish deb servcli_1.9.3-0_i386.deb \
+    -d lenny \
+    -c main
 ```
 
 `forge-publish` reads the Debian package directly in Python.
@@ -294,7 +316,7 @@ URL          : https://forge.example.com/api/packages/Software/debian/pool/lenny
 ✓ Debian package published successfully.
 ```
 
-### Supported control archive formats
+## Supported control archive formats
 
 The Debian metadata reader supports:
 
@@ -313,47 +335,45 @@ The package is read sequentially and the potentially large `data.tar.*` payload 
 
 ## Distribution
 
-The default distribution is:
-
-```text
-lenny
-```
-
-Override it with:
+The target distribution must be supplied explicitly:
 
 ```bash
 forge-publish deb package.deb \
-    --distribution bookworm
-```
-
-Short option:
-
-```bash
-forge-publish deb package.deb -d bookworm
-```
-
----
-
-## Component
-
-The default component is:
-
-```text
-main
-```
-
-Override it with:
-
-```bash
-forge-publish deb package.deb \
+    --distribution bookworm \
     --component main
 ```
 
 Short option:
 
 ```bash
-forge-publish deb package.deb -c main
+forge-publish deb package.deb \
+    -d bookworm \
+    -c main
 ```
+
+No distribution is selected automatically.
+
+---
+
+## Component
+
+The target component must also be supplied explicitly:
+
+```bash
+forge-publish deb package.deb \
+    --distribution bookworm \
+    --component main
+```
+
+Short option:
+
+```bash
+forge-publish deb package.deb \
+    -d bookworm \
+    -c main
+```
+
+No component is selected automatically.
 
 ---
 
@@ -362,7 +382,10 @@ forge-publish deb package.deb -c main
 TLS certificate verification can be explicitly disabled with:
 
 ```bash
-forge-publish deb package.deb --insecure
+forge-publish deb package.deb \
+    --distribution lenny \
+    --component main \
+    --insecure
 ```
 
 This should only be used in controlled environments where the Forgejo server certificate cannot be validated by the local trust store.
@@ -403,10 +426,13 @@ Examples include:
 
 ## Publish a Generic package
 
+A Generic publication requires the package name, version, and filename stored in Forgejo:
+
 ```bash
 forge-publish generic servcli.tar.gz \
     --package servcli \
-    --version 1.9.3
+    --version 1.9.3 \
+    --filename servcli.tar.gz
 ```
 
 This publishes the file to an endpoint such as:
@@ -435,17 +461,24 @@ URL path components are percent-encoded when required.
 
 ---
 
-## Specify the stored filename
+## Stored filename
 
-By default, the source filename is used.
-
-It can be overridden:
+The filename stored in Forgejo must be supplied explicitly:
 
 ```bash
 forge-publish generic firmware.bin \
     --package firmware \
     --version 2.4.0 \
     --filename firmware-linux.bin
+```
+
+To preserve the source filename, specify it explicitly:
+
+```bash
+forge-publish generic firmware.bin \
+    --package firmware \
+    --version 2.4.0 \
+    --filename firmware.bin
 ```
 
 The Forgejo endpoint is:
@@ -464,6 +497,7 @@ TLS certificate verification can be explicitly disabled with:
 forge-publish generic firmware.bin \
     --package firmware \
     --version 2.4.0 \
+    --filename firmware.bin \
     --insecure
 ```
 
@@ -479,19 +513,15 @@ NPM publication uses the standard `npm publish` command with Forgejo's NPM regis
 
 ## Publish a package
 
-Go to the directory containing `package.json`:
+The package directory must be specified explicitly.
+
+To publish the package from the current directory:
 
 ```bash
-cd my-package
+forge-publish npm .
 ```
 
-Then run:
-
-```bash
-forge-publish npm
-```
-
-Or specify the directory explicitly:
+To publish another directory:
 
 ```bash
 forge-publish npm ./my-package
@@ -557,7 +587,10 @@ Dry-run:
 ## Debian
 
 ```bash
-forge-publish deb servcli_1.9.3-0_i386.deb --dry-run
+forge-publish deb servcli_1.9.3-0_i386.deb \
+    --distribution lenny \
+    --component main \
+    --dry-run
 ```
 
 Example:
@@ -584,13 +617,14 @@ FILE : servcli_1.9.3-0_i386.deb
 forge-publish generic servcli.tar.gz \
     --package servcli \
     --version 1.9.3 \
+    --filename servcli.tar.gz \
     --dry-run
 ```
 
 ## NPM
 
 ```bash
-forge-publish npm --dry-run
+forge-publish npm . --dry-run
 ```
 
 Example:
@@ -615,43 +649,43 @@ npm publish --registry=https://forge.example.com/api/packages/Software/npm/ --us
 
 Common Forgejo HTTP errors include:
 
-### HTTP 400
+## HTTP 400
 
 ```text
 invalid package or request
 ```
 
-### HTTP 401
+## HTTP 401
 
 ```text
 authentication failed
 ```
 
-### HTTP 403
+## HTTP 403
 
 ```text
 permission denied
 ```
 
-### HTTP 404
+## HTTP 404
 
 ```text
 resource not found
 ```
 
-### HTTP 409
+## HTTP 409
 
 ```text
 package/file already exists
 ```
 
-### HTTP 413
+## HTTP 413
 
 ```text
 package/file is too large
 ```
 
-### HTTP 429
+## HTTP 429
 
 ```text
 too many requests
@@ -670,7 +704,9 @@ HTTP requests use explicit connection and transfer timeouts to avoid hanging ind
 ## Publish a Debian package
 
 ```bash
-forge-publish deb servcli_1.9.3-0_i386.deb
+forge-publish deb servcli_1.9.3-0_i386.deb \
+    --distribution lenny \
+    --component main
 ```
 
 ## Publish a binary archive
@@ -678,7 +714,8 @@ forge-publish deb servcli_1.9.3-0_i386.deb
 ```bash
 forge-publish generic servcli-1.9.3.tar.gz \
     --package servcli \
-    --version 1.9.3
+    --version 1.9.3 \
+    --filename servcli-1.9.3.tar.gz
 ```
 
 ## Publish firmware
@@ -686,7 +723,8 @@ forge-publish generic servcli-1.9.3.tar.gz \
 ```bash
 forge-publish generic firmware.bin \
     --package firmware \
-    --version 5.2.1
+    --version 5.2.1 \
+    --filename firmware.bin
 ```
 
 ## Publish to a server with unverified TLS
@@ -695,20 +733,23 @@ forge-publish generic firmware.bin \
 forge-publish generic firmware.bin \
     --package firmware \
     --version 5.2.1 \
+    --filename firmware.bin \
     --insecure
 ```
 
 ## Publish an NPM package
 
 ```bash
-cd my-package
-forge-publish npm
+forge-publish npm ./my-package
 ```
 
 ## Test without publishing
 
 ```bash
-forge-publish deb servcli_1.9.3-0_i386.deb --dry-run
+forge-publish deb servcli_1.9.3-0_i386.deb \
+    --distribution lenny \
+    --component main \
+    --dry-run
 ```
 
 ---
@@ -744,13 +785,15 @@ forge-publish/
     └── test_npm.py
 ```
 
-### `cli.py`
+## `cli.py`
 
 Defines the command-line interface and converts expected application errors into user-friendly CLI errors.
 
 It also handles command-specific options such as dry-run mode and insecure TLS configuration.
 
-### `config.py`
+Publication-specific values are intentionally required rather than inferred from built-in defaults.
+
+## `config.py`
 
 Handles:
 
@@ -759,7 +802,9 @@ Handles:
 - environment-variable authentication
 - interactive credential fallback
 
-### `client.py`
+The Forgejo URL and owner are explicitly configured and persisted rather than supplied through application defaults.
+
+## `client.py`
 
 Provides the common HTTP client used to communicate with Forgejo.
 
@@ -772,11 +817,13 @@ It handles:
 - HTTP timeouts
 - Forgejo HTTP error messages
 
-### `errors.py`
+Behavioral parameters such as dry-run and TLS verification are explicitly supplied by callers.
+
+## `errors.py`
 
 Defines the expected application exception hierarchy.
 
-### `publishers/`
+## `publishers/`
 
 Contains registry-specific publication logic:
 
@@ -787,11 +834,11 @@ publishers/
 └── npm.py
 ```
 
-### `tests/`
+## `tests/`
 
 Contains unit tests for the CLI, configuration, HTTP handling, Debian parsing, Generic publication, and NPM publication.
 
-### `.pre-commit-config.yaml`
+## `.pre-commit-config.yaml`
 
 Defines local Git hooks used during development:
 
@@ -1025,12 +1072,13 @@ publishers/
 A new publisher should generally:
 
 1. Validate its input.
-2. Extract package metadata when appropriate.
-3. Build the Forgejo registry endpoint.
-4. Use the common Forgejo client when using the HTTP API.
-5. Support dry-run mode.
-6. Raise application-specific errors for expected failures.
-7. Avoid exposing authentication credentials.
+2. Require publication-specific parameters explicitly.
+3. Extract package metadata when appropriate.
+4. Build the Forgejo registry endpoint.
+5. Use the common Forgejo client when using the HTTP API.
+6. Support dry-run mode.
+7. Raise application-specific errors for expected failures.
+8. Avoid exposing authentication credentials.
 
 No plugin or factory architecture is required for simple publisher additions.
 
@@ -1050,18 +1098,11 @@ The project is not intended to replace package managers such as:
 
 Instead, it provides a consistent interface for publishing packages to Forgejo.
 
-The main objective is to make publication predictable:
-
-```text
-forge-publish <type> <package>
-```
-
-without requiring users to manually construct Forgejo API requests or registry-specific authentication configuration.
-
 The project favors:
 
-- simple modules
+- explicit publication parameters
 - explicit behavior
+- simple modules
 - minimal dependencies
 - useful errors
 - cross-platform operation
@@ -1069,20 +1110,6 @@ The project favors:
 - automated quality checks
 - easy extension without unnecessary abstractions
 
----
+Configuration that identifies the Forgejo instance is persisted explicitly.
 
-# Future package types
-
-The architecture can be extended to support additional Forgejo package registries, for example:
-
-- RPM
-- PyPI
-- Maven
-- Cargo
-- NuGet
-- Composer
-- Alpine
-- Go packages
-- Conan
-
-These should be added as separate publishers rather than mixing registry-specific logic into the CLI.
+Publication-specific values are supplied by each command rather than inferred from application defaults.
