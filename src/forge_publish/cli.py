@@ -10,9 +10,23 @@ from .errors import ForgePublishError
 from .publishers import deb, generic, npm
 
 
-def _create_client(*, dry_run: bool) -> ForgejoClient:
+def _create_client(
+    *,
+    dry_run: bool,
+    insecure: bool = False,
+) -> ForgejoClient:
     config = load_config(require_token=not dry_run)
-    return ForgejoClient(config)
+
+    if insecure:
+        click.echo(
+            "WARNING: TLS certificate verification is disabled.",
+            err=True,
+        )
+
+    return ForgejoClient(
+        config,
+        verify_tls=not insecure,
+    )
 
 
 @click.group()
@@ -73,16 +87,25 @@ def config_command(
     default="main",
     show_default=True,
 )
+@click.option(
+    "--insecure",
+    is_flag=True,
+    help="Disable TLS certificate verification.",
+)
 @click.option("--dry-run", is_flag=True)
 def deb_command(
     file: Path,
     distribution: str,
     component: str,
+    insecure: bool,
     dry_run: bool,
 ):
     """Publish a Debian package."""
     try:
-        client = _create_client(dry_run=dry_run)
+        client = _create_client(
+            dry_run=dry_run,
+            insecure=insecure,
+        )
         deb.publish(
             client=client,
             file=file,
@@ -118,17 +141,27 @@ def deb_command(
     "--filename",
     help="Filename stored in Forgejo.",
 )
+@click.option(
+    "--insecure",
+    is_flag=True,
+    help="Disable TLS certificate verification.",
+)
 @click.option("--dry-run", is_flag=True)
 def generic_command(
     file: Path,
     package_name: str,
     version: str,
     filename: str | None,
+    insecure: bool,
     dry_run: bool,
 ):
     """Publish a Generic package."""
     try:
-        client = _create_client(dry_run=dry_run)
+        client = _create_client(
+            dry_run=dry_run,
+            insecure=insecure,
+        )
+
         generic.publish(
             client=client,
             file=file,
