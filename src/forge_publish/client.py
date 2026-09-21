@@ -17,9 +17,15 @@ class ForgejoError(ForgePublishError):
 
 
 class ForgejoClient:
-    def __init__(self, config: Config):
+    def __init__(
+        self,
+        config: Config,
+        *,
+        verify_tls: bool = True,
+    ):
         self.config = config
         self.session = requests.Session()
+        self.session.verify = verify_tls
 
         if config.token:
             self.session.auth = (
