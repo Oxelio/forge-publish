@@ -29,8 +29,6 @@ Typical locations are:
 
 On Linux, `XDG_CONFIG_HOME` is respected.
 
-Older versions stored the file in `~/.config/forge-publish/config.toml` on every platform. That legacy location is still read when the native platform path does not contain a configuration file. New saves always use the native platform path.
-
 ## Token sources
 
 The token lookup order is:
