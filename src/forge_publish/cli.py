@@ -13,7 +13,7 @@ from .publishers import deb, generic, npm
 def _create_client(
     *,
     dry_run: bool,
-    insecure: bool = False,
+    insecure: bool,
 ) -> ForgejoClient:
     config = load_config(require_token=not dry_run)
 
@@ -38,13 +38,11 @@ def main():
 @main.command("config")
 @click.option(
     "--url",
-    default="https://forge.fco.local",
-    show_default=True,
+    prompt="Forgejo URL",
 )
 @click.option(
     "--owner",
-    default="Software",
-    show_default=True,
+    prompt="Forgejo owner",
 )
 @click.option(
     "--username",
@@ -78,14 +76,12 @@ def config_command(
 @click.option(
     "--distribution",
     "-d",
-    default="lenny",
-    show_default=True,
+    required=True,
 )
 @click.option(
     "--component",
     "-c",
-    default="main",
-    show_default=True,
+    required=True,
 )
 @click.option(
     "--insecure",
@@ -191,7 +187,10 @@ def npm_command(
 ):
     """Publish an NPM package."""
     try:
-        client = _create_client(dry_run=dry_run)
+        client = _create_client(
+            dry_run=dry_run,
+            insecure=False,
+        )
         npm.publish(
             client=client,
             directory=directory,

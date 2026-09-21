@@ -79,8 +79,9 @@ def test_npm_uses_temporary_userconfig(
     )
 
     npm.publish(
-        FakeClient(),
-        package_dir,
+        client=FakeClient(),
+        directory=package_dir,
+        dry_run=False,
     )
 
     assert observed_npmrc is not None

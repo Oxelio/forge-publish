@@ -62,7 +62,8 @@ def _write_temporary_npmrc(
 def publish(
     client: ForgejoClient,
     directory: Path,
-    dry_run: bool = False,
+    *,
+    dry_run: bool,
 ) -> None:
     package = read_package_json(directory)
 

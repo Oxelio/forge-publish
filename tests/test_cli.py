@@ -75,7 +75,7 @@ def test_generic_command_passes_insecure_to_client(
     def create_client(
         *,
         dry_run: bool,
-        insecure: bool = False,
+        insecure: bool,
     ):
         captured["dry_run"] = dry_run
         captured["insecure"] = insecure
@@ -125,7 +125,7 @@ def test_deb_command_passes_insecure_to_client(
     def create_client(
         *,
         dry_run: bool,
-        insecure: bool = False,
+        insecure: bool,
     ):
         captured["dry_run"] = dry_run
         captured["insecure"] = insecure
@@ -147,6 +147,10 @@ def test_deb_command_passes_insecure_to_client(
         [
             "deb",
             str(package),
+            "--distribution",
+            "lenny",
+            "--component",
+            "main",
             "--insecure",
         ],
     )
@@ -156,3 +160,23 @@ def test_deb_command_passes_insecure_to_client(
         "dry_run": False,
         "insecure": True,
     }
+
+
+def test_deb_requires_distribution(
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "package.deb"
+    package.write_bytes(b"data")
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "deb",
+            str(package),
+            "--component",
+            "main",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Missing option '--distribution'" in result.output

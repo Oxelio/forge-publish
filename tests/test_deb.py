@@ -25,7 +25,8 @@ class FakeClient:
         self,
         url: str,
         file: Path,
-        dry_run: bool = False,
+        *,
+        dry_run: bool,
     ) -> None:
         raise AssertionError("upload should not be called")
 
@@ -163,6 +164,7 @@ def test_debian_publish_rejects_unsafe_path_segments(
             file=package,
             distribution=distribution,
             component=component,
+            dry_run=False,
         )
 
 

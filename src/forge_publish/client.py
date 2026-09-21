@@ -21,7 +21,7 @@ class ForgejoClient:
         self,
         config: Config,
         *,
-        verify_tls: bool = True,
+        verify_tls: bool,
     ):
         self.config = config
         self.verify_tls = verify_tls
@@ -37,7 +37,8 @@ class ForgejoClient:
         self,
         url: str,
         file: Path,
-        dry_run: bool = False,
+        *,
+        dry_run: bool,
     ) -> None:
         if dry_run:
             print()
@@ -75,8 +76,9 @@ class ForgejoClient:
     def delete(
         self,
         url: str,
-        dry_run: bool = False,
-        ignore_404: bool = False,
+        *,
+        dry_run: bool,
+        ignore_404: bool,
     ) -> None:
         if dry_run:
             print()
