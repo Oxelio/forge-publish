@@ -44,16 +44,21 @@ class ForgejoClient:
         self._require_authentication()
 
         try:
-            with file.open("rb") as stream:
+            stream = file.open("rb")
+        except OSError as exc:
+            raise ForgejoError(f"Unable to read file: {file}") from exc
+
+        try:
+            with stream:
                 response = self.session.put(
                     url,
                     data=stream,
                     timeout=REQUEST_TIMEOUT,
                 )
-        except OSError as exc:
-            raise ForgejoError(f"Unable to read file: {file}") from exc
         except requests.RequestException as exc:
             raise ForgejoError(f"HTTP request failed: {exc}") from exc
+        except OSError as exc:
+            raise ForgejoError(f"Unable to read file: {file}") from exc
 
         if 200 <= response.status_code < 300:
             return

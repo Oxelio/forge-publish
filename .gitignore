@@ -94,3 +94,4 @@ forge-publish.local.toml
 *.tar.bz2
 *.zip
 *.bin
+*.exe
