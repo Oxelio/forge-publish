@@ -2,10 +2,9 @@
 
 Releases use Python Semantic Release and Conventional Commits.
 
-The current configuration tracks the version in:
+The project has a single version source: `project.version` in `pyproject.toml`.
 
-- `pyproject.toml`
-- `src/forge_publish/__init__.py`
+Python Semantic Release updates that value. At runtime, `forge_publish.__version__` reads the installed package metadata through `importlib.metadata`, so no second version constant has to be maintained.
 
 Tags use the format `v{version}`.
 
@@ -19,7 +18,7 @@ The workflow:
 
 1. evaluates Conventional Commits
 2. determines the next semantic version
-3. updates version files
+3. updates `project.version` in `pyproject.toml`
 4. updates `CHANGELOG.md`
 5. builds the wheel and source distribution
 6. creates the release commit and tag
