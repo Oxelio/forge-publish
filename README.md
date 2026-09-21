@@ -8,7 +8,7 @@ A small command-line interface (CLI) for publishing packages to a [Forgejo](http
 - Generic packages (archives, binaries, firmware, etc.)
 - NPM packages
 
-The goal is to make package publication explicit and predictable without requiring users to manually construct Forgejo API URLs, authentication configuration, or `curl` commands.
+The goal is to make package publication predictable and explicit where it matters, without requiring users to manually construct Forgejo API URLs, authentication configuration, or `curl` commands.
 
 ---
 
@@ -20,7 +20,8 @@ The goal is to make package publication explicit and predictable without requiri
 - Store Forgejo connection settings locally
 - Store Forgejo tokens securely in the system keyring
 - Support `FORGE_PUBLISH_TOKEN` for CI/CD environments
-- Require publication-specific parameters explicitly
+- Avoid arbitrary environment and publication-target defaults
+- Use natural defaults where behavior is unambiguous
 - Dry-run mode without requiring authentication
 - Automatic Debian package metadata detection
 - Parse Debian packages without `dpkg-deb`
@@ -237,7 +238,6 @@ For example:
 forge-publish generic firmware.bin \
     --package firmware \
     --version 1.0.0 \
-    --filename firmware.bin \
     --insecure
 ```
 
@@ -273,7 +273,9 @@ generic
 npm
 ```
 
-Publication-specific values are intentionally explicit rather than inferred from built-in defaults.
+Environment-specific and publication-target values are explicit when no natural unambiguous value can be inferred.
+
+Natural defaults such as the source filename for Generic packages or the current directory for NPM packages are preserved.
 
 ---
 
@@ -426,16 +428,17 @@ Examples include:
 
 ## Publish a Generic package
 
-A Generic publication requires the package name, version, and filename stored in Forgejo:
+A Generic publication requires a package name and version:
 
 ```bash
 forge-publish generic servcli.tar.gz \
     --package servcli \
-    --version 1.9.3 \
-    --filename servcli.tar.gz
+    --version 1.9.3
 ```
 
-This publishes the file to an endpoint such as:
+By default, the source filename is used as the filename stored in Forgejo.
+
+For example:
 
 ```text
 /api/packages/Software/generic/servcli/1.9.3/servcli.tar.gz
@@ -463,22 +466,29 @@ URL path components are percent-encoded when required.
 
 ## Stored filename
 
-The filename stored in Forgejo must be supplied explicitly:
+By default, the source filename is preserved.
+
+For example:
+
+```bash
+forge-publish generic firmware.bin \
+    --package firmware \
+    --version 2.4.0
+```
+
+stores the file as:
+
+```text
+firmware.bin
+```
+
+The stored filename can be overridden explicitly:
 
 ```bash
 forge-publish generic firmware.bin \
     --package firmware \
     --version 2.4.0 \
     --filename firmware-linux.bin
-```
-
-To preserve the source filename, specify it explicitly:
-
-```bash
-forge-publish generic firmware.bin \
-    --package firmware \
-    --version 2.4.0 \
-    --filename firmware.bin
 ```
 
 The Forgejo endpoint is:
@@ -497,7 +507,6 @@ TLS certificate verification can be explicitly disabled with:
 forge-publish generic firmware.bin \
     --package firmware \
     --version 2.4.0 \
-    --filename firmware.bin \
     --insecure
 ```
 
@@ -513,15 +522,19 @@ NPM publication uses the standard `npm publish` command with Forgejo's NPM regis
 
 ## Publish a package
 
-The package directory must be specified explicitly.
+By default, the current directory is used:
 
-To publish the package from the current directory:
+```bash
+forge-publish npm
+```
+
+This is equivalent to:
 
 ```bash
 forge-publish npm .
 ```
 
-To publish another directory:
+Another package directory can be specified explicitly:
 
 ```bash
 forge-publish npm ./my-package
@@ -617,14 +630,13 @@ FILE : servcli_1.9.3-0_i386.deb
 forge-publish generic servcli.tar.gz \
     --package servcli \
     --version 1.9.3 \
-    --filename servcli.tar.gz \
     --dry-run
 ```
 
 ## NPM
 
 ```bash
-forge-publish npm . --dry-run
+forge-publish npm --dry-run
 ```
 
 Example:
@@ -714,8 +726,7 @@ forge-publish deb servcli_1.9.3-0_i386.deb \
 ```bash
 forge-publish generic servcli-1.9.3.tar.gz \
     --package servcli \
-    --version 1.9.3 \
-    --filename servcli-1.9.3.tar.gz
+    --version 1.9.3
 ```
 
 ## Publish firmware
@@ -723,8 +734,16 @@ forge-publish generic servcli-1.9.3.tar.gz \
 ```bash
 forge-publish generic firmware.bin \
     --package firmware \
+    --version 5.2.1
+```
+
+## Publish firmware under another filename
+
+```bash
+forge-publish generic firmware.bin \
+    --package firmware \
     --version 5.2.1 \
-    --filename firmware.bin
+    --filename firmware-linux.bin
 ```
 
 ## Publish to a server with unverified TLS
@@ -733,11 +752,16 @@ forge-publish generic firmware.bin \
 forge-publish generic firmware.bin \
     --package firmware \
     --version 5.2.1 \
-    --filename firmware.bin \
     --insecure
 ```
 
-## Publish an NPM package
+## Publish an NPM package from the current directory
+
+```bash
+forge-publish npm
+```
+
+## Publish an NPM package from another directory
 
 ```bash
 forge-publish npm ./my-package
@@ -791,7 +815,7 @@ Defines the command-line interface and converts expected application errors into
 
 It also handles command-specific options such as dry-run mode and insecure TLS configuration.
 
-Publication-specific values are intentionally required rather than inferred from built-in defaults.
+Environment-specific and destination-specific parameters are intentionally explicit when no natural value can be inferred.
 
 ## `config.py`
 
@@ -1072,13 +1096,14 @@ publishers/
 A new publisher should generally:
 
 1. Validate its input.
-2. Require publication-specific parameters explicitly.
-3. Extract package metadata when appropriate.
-4. Build the Forgejo registry endpoint.
-5. Use the common Forgejo client when using the HTTP API.
-6. Support dry-run mode.
-7. Raise application-specific errors for expected failures.
-8. Avoid exposing authentication credentials.
+2. Avoid arbitrary defaults for environment-specific or publication-target parameters.
+3. Use natural inferred values only when they are unambiguous.
+4. Extract package metadata when appropriate.
+5. Build the Forgejo registry endpoint.
+6. Use the common Forgejo client when using the HTTP API.
+7. Support dry-run mode.
+8. Raise application-specific errors for expected failures.
+9. Avoid exposing authentication credentials.
 
 No plugin or factory architecture is required for simple publisher additions.
 
@@ -1100,8 +1125,10 @@ Instead, it provides a consistent interface for publishing packages to Forgejo.
 
 The project favors:
 
-- explicit publication parameters
-- explicit behavior
+- explicit environment configuration
+- explicit destination-specific parameters
+- natural and unambiguous inferred defaults
+- explicit internal behavior
 - simple modules
 - minimal dependencies
 - useful errors
@@ -1112,4 +1139,6 @@ The project favors:
 
 Configuration that identifies the Forgejo instance is persisted explicitly.
 
-Publication-specific values are supplied by each command rather than inferred from application defaults.
+Publication-target values such as Debian distribution and component must be provided explicitly.
+
+Natural values may still be inferred when they are unambiguous, such as using the source filename for Generic packages or the current directory for NPM publication.
