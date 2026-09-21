@@ -206,7 +206,6 @@ def test_configure_does_not_use_keyring_with_environment_token(
     assert config_file.exists()
 
 
-
 def test_load_config_falls_back_to_legacy_path(
     tmp_path: Path,
     monkeypatch,
