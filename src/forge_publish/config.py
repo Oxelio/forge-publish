@@ -69,15 +69,30 @@ def _normalize_owner(owner: str) -> str:
 
 def _normalize_url(url: str) -> str:
     normalized = url.strip().rstrip("/")
+
+    if "?" in normalized or "#" in normalized:
+        raise ConfigurationError(
+            "Forgejo URL must be a valid HTTPS URL without "
+            "credentials, query parameters, or fragments."
+        )
+
     parsed = urlsplit(normalized)
+
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise ConfigurationError(
+            "Forgejo URL must be a valid HTTPS URL without "
+            "credentials, query parameters, or fragments."
+        ) from exc
 
     if (
         parsed.scheme != "https"
+        or not parsed.netloc
         or not parsed.hostname
         or parsed.username is not None
         or parsed.password is not None
-        or parsed.query
-        or parsed.fragment
+        or any(character.isspace() for character in normalized)
     ):
         raise ConfigurationError(
             "Forgejo URL must be a valid HTTPS URL without "

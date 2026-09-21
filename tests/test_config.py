@@ -12,6 +12,8 @@ from forge_publish.errors import ConfigurationError
     [
         "https://forge.example.com?foo=bar",
         "https://forge.example.com#fragment",
+        "https://forge.example.com?",
+        "https://forge.example.com#",
     ],
 )
 def test_rejects_url_query_and_fragment(url: str) -> None:
@@ -161,9 +163,12 @@ def test_rejects_unsafe_owner(owner: str) -> None:
     [
         "http://forge.example.com",
         "https://user:password@forge.example.com",
+        "https://forge.example.com:abc",
+        "https://forge.example.com:99999",
+        "https://forge.example.com/bad path",
     ],
 )
-def test_rejects_insecure_url(url: str) -> None:
+def test_rejects_invalid_url(url: str) -> None:
     with pytest.raises(ConfigurationError):
         config_module._normalize_url(url)
 

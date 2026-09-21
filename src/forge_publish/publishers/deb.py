@@ -258,22 +258,45 @@ def _parse_control(data: bytes) -> dict[str, str]:
     result: dict[str, str] = {}
     text = data.decode("utf-8", errors="replace")
     current_key: str | None = None
+    paragraph_ended = False
 
     for line in text.splitlines():
-        if line.startswith((" ", "\t")) and current_key:
-            result[current_key] += "\n" + line.strip()
+        if not line:
+            if result:
+                paragraph_ended = True
+            current_key = None
+            continue
+
+        if paragraph_ended:
+            raise PackageError(
+                "Invalid Debian control file: multiple paragraphs are not allowed."
+            )
+
+        if line.startswith((" ", "\t")):
+            if current_key is None:
+                raise PackageError(
+                    "Invalid Debian control file: continuation line without a field."
+                )
+            result[current_key] += "\n" + line[1:]
             continue
 
         if ":" not in line:
-            continue
+            raise PackageError("Invalid Debian control file: malformed field line.")
 
         key, value = line.split(":", 1)
         key = key.strip().casefold()
         value = value.strip()
 
-        if key:
-            result[key] = value
-            current_key = key
+        if not key or any(character.isspace() for character in key):
+            raise PackageError("Invalid Debian control file: malformed field name.")
+
+        if key in result:
+            raise PackageError(
+                f"Invalid Debian control file: duplicate field {key!r}."
+            )
+
+        result[key] = value
+        current_key = key
 
     return result
 
