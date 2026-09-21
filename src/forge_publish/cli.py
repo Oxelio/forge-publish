@@ -17,6 +17,12 @@ def _create_client(
 ) -> ForgejoClient:
     config = load_config(require_token=not dry_run)
 
+    if insecure:
+        click.echo(
+            "WARNING: TLS certificate verification is disabled.",
+            err=True,
+        )
+
     return ForgejoClient(
         config,
         verify_tls=not insecure,
@@ -178,23 +184,14 @@ def generic_command(
     ),
     default=".",
 )
-@click.option(
-    "--insecure",
-    is_flag=True,
-    help="Disable TLS certificate verification.",
-)
 @click.option("--dry-run", is_flag=True)
 def npm_command(
     directory: Path,
-    insecure: bool,
     dry_run: bool,
 ):
     """Publish an NPM package."""
     try:
-        client = _create_client(
-            dry_run=dry_run,
-            insecure=insecure,
-        )
+        client = _create_client(dry_run=dry_run)
         npm.publish(
             client=client,
             directory=directory,

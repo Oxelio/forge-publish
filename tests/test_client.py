@@ -92,3 +92,17 @@ def test_upload_reports_network_error(tmp_path: Path) -> None:
             "https://forge.example.com/upload",
             package,
         )
+
+
+def test_client_disables_tls_verification() -> None:
+    client = ForgejoClient(
+        Config(
+            url="https://forge.example.com",
+            owner="Software",
+            username="user",
+            token="secret",
+        ),
+        verify_tls=False,
+    )
+
+    assert client.session.verify is False
