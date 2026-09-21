@@ -34,7 +34,7 @@ The repository currently requires changes to `main` to arrive through pull reque
 
 Before enabling unattended releases, configure a dedicated GitHub App or release actor in the ruleset bypass list with permission to perform the release push. Keep normal contributors subject to the pull-request requirement.
 
-The workflow uses `GITHUB_TOKEN`; if a different release actor is chosen, update the workflow to mint or provide that actor's token rather than weakening the ruleset globally.
+The workflow uses the `RELEASE_TOKEN` repository secret when it is configured and falls back to `GITHUB_TOKEN` otherwise. For the current protected `main` branch, configure `RELEASE_TOKEN` with a token belonging to a dedicated release actor that is allowed to bypass the pull-request rule. Do not weaken the ruleset globally.
 
 ## Local verification
 
