@@ -47,7 +47,6 @@ addopts = [
 
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
-version_variables = ["src/forge_publish/__init__.py:__version__"]
 commit_parser = "conventional"
 tag_format = "v{version}"
 allow_zero_version = true
