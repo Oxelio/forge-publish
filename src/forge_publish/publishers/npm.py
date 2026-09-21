@@ -90,7 +90,11 @@ def publish(
         print()
         print("DRY RUN")
         print("-------")
-        print(f"npm publish --registry={registry} --userconfig=<temporary .npmrc>")
+        print("npm pack --pack-destination=<temporary directory>")
+        print(
+            f"npm publish <packed .tgz> --registry={registry} "
+            "--userconfig=<temporary .npmrc> --ignore-scripts"
+        )
         return
 
     token = client.config.token
@@ -103,39 +107,65 @@ def publish(
     if npm_executable is None:
         raise PackageError("npm is not installed or not available in PATH.")
 
+    environment = os.environ.copy()
+    environment.pop(TOKEN_ENV_VAR, None)
+
     try:
         with tempfile.TemporaryDirectory(
             prefix="forge-publish-"
         ) as temporary_directory:
+            temporary_path = Path(temporary_directory)
+
+            try:
+                subprocess.run(
+                    [
+                        npm_executable,
+                        "pack",
+                        f"--pack-destination={temporary_path}",
+                    ],
+                    cwd=directory,
+                    check=True,
+                    env=environment,
+                )
+            except subprocess.CalledProcessError as exc:
+                raise PackageError(
+                    f"npm pack failed with exit code {exc.returncode}"
+                ) from exc
+
+            archives = list(temporary_path.glob("*.tgz"))
+            if len(archives) != 1:
+                raise PackageError(
+                    "npm pack did not produce exactly one package archive."
+                )
+
             npmrc = _write_temporary_npmrc(
-                Path(temporary_directory),
+                temporary_path,
                 registry,
                 token,
             )
 
-            environment = os.environ.copy()
-            environment.pop(TOKEN_ENV_VAR, None)
-
-            subprocess.run(
-                [
-                    npm_executable,
-                    "publish",
-                    f"--registry={registry}",
-                    f"--userconfig={npmrc}",
-                ],
-                cwd=directory,
-                check=True,
-                env=environment,
-            )
+            try:
+                subprocess.run(
+                    [
+                        npm_executable,
+                        "publish",
+                        str(archives[0]),
+                        f"--registry={registry}",
+                        f"--userconfig={npmrc}",
+                        "--ignore-scripts",
+                    ],
+                    cwd=directory,
+                    check=True,
+                    env=environment,
+                )
+            except subprocess.CalledProcessError as exc:
+                raise PackageError(
+                    f"npm publish failed with exit code {exc.returncode}"
+                ) from exc
 
     except OSError as exc:
         raise PackageError(
             "Unable to create or use the temporary npm configuration."
-        ) from exc
-
-    except subprocess.CalledProcessError as exc:
-        raise PackageError(
-            f"npm publish failed with exit code {exc.returncode}"
         ) from exc
 
     print()

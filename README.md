@@ -573,13 +573,21 @@ registry=https://forge.example.com/api/packages/Software/npm/
 //forge.example.com/api/packages/Software/npm/:_authToken=<token>
 ```
 
-The temporary configuration is passed explicitly to npm:
+The source package is first packed without Forgejo credentials:
 
 ```text
-npm publish --registry=<registry> --userconfig=<temporary .npmrc>
+npm pack --pack-destination=<temporary directory>
 ```
 
-The `.npmrc` is created outside the project directory and removed automatically after publication.
+Lifecycle scripts needed to prepare the package can run during this phase, but the Forgejo token is not present in the environment and the temporary authentication file does not exist yet.
+
+The generated archive is then published with the temporary authentication configuration and package lifecycle scripts disabled:
+
+```text
+npm publish <packed .tgz> --registry=<registry> --userconfig=<temporary .npmrc> --ignore-scripts
+```
+
+The `.npmrc` and packed archive are created outside the project directory and removed automatically after publication.
 
 The authentication token is not passed directly as a command-line argument.
 
@@ -650,7 +658,8 @@ Registry : https://forge.example.com/api/packages/Software/npm/
 
 DRY RUN
 -------
-npm publish --registry=https://forge.example.com/api/packages/Software/npm/ --userconfig=<temporary .npmrc>
+npm pack --pack-destination=<temporary directory>
+npm publish <packed .tgz> --registry=https://forge.example.com/api/packages/Software/npm/ --userconfig=<temporary .npmrc> --ignore-scripts
 ```
 
 ---

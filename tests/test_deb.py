@@ -189,3 +189,31 @@ def test_rejects_oversized_decompressed_control_archive(
 
     with pytest.raises(PackageError, match="too large"):
         read_deb_metadata(package)
+
+
+@pytest.mark.parametrize(
+    "control",
+    [
+        b"Package servcli\nVersion: 1.9.3-0\nArchitecture: i386\n",
+        (
+            b"Package: servcli\n"
+            b"Package: duplicate\n"
+            b"Version: 1.9.3-0\n"
+            b"Architecture: i386\n"
+        ),
+        (b"Package: servcli\n\nVersion: 1.9.3-0\nArchitecture: i386\n"),
+    ],
+)
+def test_rejects_malformed_debian_control(
+    tmp_path: Path,
+    control: bytes,
+) -> None:
+    package = tmp_path / "invalid-control.deb"
+    _write_deb(
+        package,
+        "control.tar.gz",
+        gzip.compress(_tar_control(control)),
+    )
+
+    with pytest.raises(PackageError, match="Invalid Debian control file"):
+        read_deb_metadata(package)
