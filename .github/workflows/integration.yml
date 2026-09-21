@@ -1,0 +1,114 @@
+name: Forgejo integration
+
+on:
+  pull_request:
+    branches:
+      - development
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Forgejo 16.0.5
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install forge-publish
+        run: python -m pip install -e .
+
+      - name: Prepare Forgejo TLS files
+        run: |
+          mkdir -p "${RUNNER_TEMP}/forgejo"
+          openssl req             -x509             -newkey rsa:2048             -sha256             -days 1             -nodes             -keyout "${RUNNER_TEMP}/forgejo/key.pem"             -out "${RUNNER_TEMP}/forgejo/cert.pem"             -subj "/CN=localhost"             -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+          sudo chown -R 1000:1000 "${RUNNER_TEMP}/forgejo"
+
+      - name: Start Forgejo
+        run: |
+          docker run             --detach             --name forgejo             --publish 3000:3000             --volume "${RUNNER_TEMP}/forgejo:/data"             --env USER_UID=1000             --env USER_GID=1000             --env FORGEJO__security__INSTALL_LOCK=true             --env FORGEJO__service__DISABLE_REGISTRATION=true             --env FORGEJO__server__PROTOCOL=https             --env FORGEJO__server__DOMAIN=localhost             --env FORGEJO__server__ROOT_URL=https://localhost:3000/             --env FORGEJO__server__HTTP_PORT=3000             --env FORGEJO__server__CERT_FILE=/data/cert.pem             --env FORGEJO__server__KEY_FILE=/data/key.pem             codeberg.org/forgejo/forgejo:16.0.5
+
+      - name: Wait for Forgejo
+        run: |
+          for attempt in {1..90}; do
+            if curl               --insecure               --fail               --silent               --show-error               https://localhost:3000/api/v1/version > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          docker logs forgejo
+          exit 1
+
+      - name: Create integration user and token
+        run: |
+          docker exec             --user 1000             forgejo             forgejo admin user create               --username integration               --password integration-password               --email integration@example.invalid               --must-change-password=false
+
+          token="$(
+            docker exec               --user 1000               forgejo               forgejo admin user generate-access-token                 --username integration                 --token-name forge-publish-ci                 --raw                 --scopes all |
+              tr -d '\r\n'
+          )"
+
+          if [ -z "${token}" ]; then
+            echo "Forgejo did not return an access token." >&2
+            exit 1
+          fi
+
+          echo "::add-mask::${token}"
+          echo "FORGE_PUBLISH_TOKEN=${token}" >> "${GITHUB_ENV}"
+
+      - name: Configure forge-publish
+        run: |
+          forge-publish config             --url https://localhost:3000             --owner integration             --username integration
+
+      - name: Publish Generic package
+        run: |
+          printf 'forge-publish integration\n' > "${RUNNER_TEMP}/integration.bin"
+
+          forge-publish generic "${RUNNER_TEMP}/integration.bin"             --package integration-generic             --version 1.0.0             --insecure
+
+      - name: Build Debian fixture
+        run: |
+          package_root="${RUNNER_TEMP}/debian-package"
+          mkdir -p "${package_root}/DEBIAN"
+          mkdir -p "${package_root}/usr/share/forge-publish"
+
+          cat > "${package_root}/DEBIAN/control" <<'EOF'
+          Package: forge-publish-integration
+          Version: 1.0.0
+          Architecture: all
+          Maintainer: forge-publish CI <integration@example.invalid>
+          Description: forge-publish integration test package
+          EOF
+
+          printf 'forge-publish integration\n' >             "${package_root}/usr/share/forge-publish/integration.txt"
+
+          dpkg-deb             --build "${package_root}"             "${RUNNER_TEMP}/forge-publish-integration_1.0.0_all.deb"
+
+      - name: Publish Debian package
+        run: |
+          forge-publish deb             "${RUNNER_TEMP}/forge-publish-integration_1.0.0_all.deb"             --distribution integration             --component main             --insecure
+
+      - name: Show Forgejo logs on failure
+        if: ${{ failure() }}
+        run: docker logs forgejo
+
+      - name: Stop Forgejo
+        if: ${{ always() }}
+        run: docker rm --force forgejo

@@ -73,6 +73,10 @@ Pull requests run:
 
 The `Quality checks` job remains the required status check used by the repository ruleset.
 
+A separate Forgejo integration workflow starts Forgejo 16.0.5 in Docker with an ephemeral self-signed TLS certificate and validates real Generic and Debian publication through the CLI.
+
+NPM remains covered by unit tests in this integration workflow because authenticated NPM publication intentionally does not expose an insecure-TLS mode.
+
 ## Adding a publisher
 
 Keep registry-specific behavior in `src/forge_publish/publishers/`.
