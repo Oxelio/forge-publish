@@ -17,7 +17,7 @@ def _create_client(
 ) -> ForgejoClient:
     config = load_config(require_token=not dry_run)
 
-    if insecure:
+    if insecure and not dry_run:
         click.echo(
             "WARNING: TLS certificate verification is disabled.",
             err=True,

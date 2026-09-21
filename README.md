@@ -26,6 +26,7 @@ The goal is to make package publication predictable without requiring users to r
 - Support gzip, xz, zstd, bzip2, lzma, and uncompressed Debian control archives
 - Use temporary NPM authentication configuration
 - HTTP timeout and Forgejo error handling
+- Optional insecure TLS mode for Debian and Generic package publishing
 - Clear package information before publication
 - Cross-platform support
 - Automated tests with branch coverage
@@ -216,6 +217,35 @@ For CI/CD, prefer `FORGE_PUBLISH_TOKEN` through the CI platform's secret-managem
 
 If a token is accidentally exposed, revoke it and generate a new one.
 
+### TLS certificate verification
+
+TLS certificate verification is enabled by default.
+
+For development environments or Forgejo instances using certificates that cannot be validated by the local trust store, Debian and Generic package publishing can explicitly disable TLS certificate verification with:
+
+```text
+--insecure
+```
+
+For example:
+
+```bash
+forge-publish generic firmware.bin \
+    --package firmware \
+    --version 1.0.0 \
+    --insecure
+```
+
+or:
+
+```bash
+forge-publish deb package.deb --insecure
+```
+
+Using `--insecure` disables server certificate verification and therefore removes protection against man-in-the-middle attacks.
+
+It should only be used in controlled environments. Configuring the appropriate certificate authority in the operating system trust store is preferred whenever possible.
+
 ---
 
 # Usage
@@ -327,6 +357,20 @@ forge-publish deb package.deb -c main
 
 ---
 
+## Disable TLS certificate verification
+
+TLS certificate verification can be explicitly disabled with:
+
+```bash
+forge-publish deb package.deb --insecure
+```
+
+This should only be used in controlled environments where the Forgejo server certificate cannot be validated by the local trust store.
+
+Prefer configuring the appropriate certificate authority instead of disabling certificate verification whenever possible.
+
+---
+
 ## Complete example
 
 ```bash
@@ -409,6 +453,23 @@ The Forgejo endpoint is:
 ```text
 PUT /api/packages/{owner}/generic/{package}/{version}/{filename}
 ```
+
+---
+
+## Disable TLS certificate verification
+
+TLS certificate verification can be explicitly disabled with:
+
+```bash
+forge-publish generic firmware.bin \
+    --package firmware \
+    --version 2.4.0 \
+    --insecure
+```
+
+When enabled, a warning is displayed before publication.
+
+This option should only be used in controlled environments. Configuring the appropriate certificate authority in the local trust store is preferred.
 
 ---
 
@@ -628,6 +689,15 @@ forge-publish generic firmware.bin \
     --version 5.2.1
 ```
 
+## Publish to a server with unverified TLS
+
+```bash
+forge-publish generic firmware.bin \
+    --package firmware \
+    --version 5.2.1 \
+    --insecure
+```
+
 ## Publish an NPM package
 
 ```bash
@@ -666,6 +736,7 @@ forge-publish/
 │           ├── generic.py
 │           └── npm.py
 └── tests/
+    ├── test_cli.py
     ├── test_client.py
     ├── test_config.py
     ├── test_deb.py
@@ -676,6 +747,8 @@ forge-publish/
 ### `cli.py`
 
 Defines the command-line interface and converts expected application errors into user-friendly CLI errors.
+
+It also handles command-specific options such as dry-run mode and insecure TLS configuration.
 
 ### `config.py`
 
@@ -695,6 +768,7 @@ It handles:
 - authentication
 - uploads
 - deletes
+- TLS certificate verification
 - HTTP timeouts
 - Forgejo HTTP error messages
 
@@ -715,7 +789,7 @@ publishers/
 
 ### `tests/`
 
-Contains unit tests for configuration, HTTP handling, Debian parsing, Generic publication, and NPM publication.
+Contains unit tests for the CLI, configuration, HTTP handling, Debian parsing, Generic publication, and NPM publication.
 
 ### `.pre-commit-config.yaml`
 
