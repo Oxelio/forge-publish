@@ -10,8 +10,8 @@ from urllib.parse import urlsplit
 
 import keyring
 import tomli_w
-from platformdirs import user_config_path
 from keyring.errors import KeyringError
+from platformdirs import user_config_path
 
 from .errors import ConfigurationError
 
