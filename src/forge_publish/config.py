@@ -105,21 +105,33 @@ def _normalize_url(url: str) -> str:
     return normalized
 
 
+def _config_file_for_read() -> Path:
+    if CONFIG_FILE.exists():
+        return CONFIG_FILE
+
+    if LEGACY_CONFIG_FILE != CONFIG_FILE and LEGACY_CONFIG_FILE.exists():
+        return LEGACY_CONFIG_FILE
+
+    return CONFIG_FILE
+
+
 def _read_config_data() -> dict[str, object]:
-    if not CONFIG_FILE.exists():
+    config_file = _config_file_for_read()
+
+    if not config_file.exists():
         raise ConfigurationError(
-            f"Configuration file does not exist: {CONFIG_FILE}\n"
+            f"Configuration file does not exist: {config_file}\n"
             "Run: forge-publish config"
         )
 
     try:
-        with CONFIG_FILE.open("rb") as file:
+        with config_file.open("rb") as file:
             data = tomllib.load(file)
     except tomllib.TOMLDecodeError as exc:
-        raise ConfigurationError(f"Invalid TOML configuration: {CONFIG_FILE}") from exc
+        raise ConfigurationError(f"Invalid TOML configuration: {config_file}") from exc
     except OSError as exc:
         raise ConfigurationError(
-            f"Unable to read configuration file: {CONFIG_FILE}"
+            f"Unable to read configuration file: {config_file}"
         ) from exc
 
     if not isinstance(data, dict):
