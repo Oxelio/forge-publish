@@ -31,7 +31,7 @@ def test_create_client_does_not_warn_when_insecure_dry_run(
     captured = capsys.readouterr()
 
     assert captured.err == ""
-    assert client.session.verify is False
+    assert client.verify_tls is False
 
 
 def test_create_client_warns_when_tls_verification_is_disabled(
@@ -59,7 +59,7 @@ def test_create_client_warns_when_tls_verification_is_disabled(
     captured = capsys.readouterr()
 
     assert captured.err == ("WARNING: TLS certificate verification is disabled.\n")
-    assert client.session.verify is False
+    assert client.verify_tls is False
 
 
 def test_generic_command_passes_insecure_to_client(
