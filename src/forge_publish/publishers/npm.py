@@ -16,7 +16,7 @@ from ..errors import PackageError
 
 MIN_NPM_VERSION = (10, 5, 2)
 MIN_NPM_VERSION_TEXT = ".".join(str(part) for part in MIN_NPM_VERSION)
-NPM_VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
+NPM_VERSION_PATTERN = re.compile(\n    r"^(\\d+)\\.(\\d+)\\.(\\d+)(?P<prerelease>-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"\n)
 NPM_TOKEN_ENV_VARS = {
     TOKEN_ENV_VAR.casefold(),
     "npm_token",
