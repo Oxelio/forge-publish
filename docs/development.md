@@ -72,15 +72,15 @@ Pull requests run:
 - the full quality suite on Python 3.14
 - Windows compatibility on Python 3.11 and 3.14
 
-The `Quality checks` job remains the required status check used by the repository ruleset. It depends on the reusable Forgejo integration workflow and fails explicitly unless that integration succeeds, so the required check cannot pass when real Forgejo publication is broken.
+The repository ruleset continues to require the `Quality checks` status. CI now runs the main quality suite, Forgejo integration, Linux compatibility matrix, and Windows compatibility matrix in parallel. A final job named `Quality checks` depends on all four groups and fails unless every group succeeds.
 
-The Forgejo integration workflow starts Forgejo 16.0.5 in Docker with an ephemeral self-signed TLS certificate and validates real Generic, Debian, and NPM publication through the CLI. It also verifies that Forgejo rejects invalid credentials.
+The Forgejo integration workflow starts a digest-pinned Forgejo 16.0.5 image with an ephemeral self-signed TLS certificate and validates real Generic, Debian, and NPM publication through the CLI. Node.js is pinned to 24.21.0 for this integration environment. The workflow also verifies that Forgejo rejects invalid credentials.
 
-For NPM, the integration fixture deliberately includes conflicting project-local NPM authentication and TLS settings. The publish must still use the temporary Forgejo credentials and verified TLS through Node's `NODE_EXTRA_CA_CERTS` mechanism.
+For NPM, the integration fixture deliberately includes conflicting project-local NPM authentication and TLS settings plus conflicting `publishConfig.registry` and `publishConfig.strict-ssl` values. The publish must still use the temporary Forgejo credentials and verified TLS through Node's `NODE_EXTRA_CA_CERTS` mechanism.
 
 Distribution verification installs the built wheel into a clean virtual environment and runs `pip check` before exercising the installed CLI. Release dependencies are validated with `pip check` as well.
 
-Third-party GitHub Actions used by CI and release workflows are pinned to full commit SHAs, with the corresponding major version documented inline.
+Third-party GitHub Actions used by CI and release workflows are pinned to full commit SHAs, with the corresponding major version documented inline. Dependabot checks those GitHub Actions weekly so immutable pins can still be maintained through reviewable pull requests.
 
 ## Adding a publisher
 
