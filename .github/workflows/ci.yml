@@ -21,20 +21,12 @@ jobs:
     uses: ./.github/workflows/integration.yml
 
   quality:
-    name: Quality checks
-    needs:
-      - integration
-    if: ${{ always() && github.event.pull_request.draft == false }}
+    name: Quality suite
+    if: ${{ github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      - name: Require Forgejo integration
-        if: ${{ needs.integration.result != 'success' }}
-        run: |
-          echo "Forgejo integration did not succeed." >&2
-          exit 1
-
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -123,3 +115,34 @@ jobs:
 
       - name: Run tests
         run: pytest
+
+  gate:
+    name: Quality checks
+    needs:
+      - integration
+      - quality
+      - python
+      - windows
+    if: ${{ always() && github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Require all validation jobs
+        env:
+          INTEGRATION_RESULT: ${{ needs.integration.result }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          PYTHON_RESULT: ${{ needs.python.result }}
+          WINDOWS_RESULT: ${{ needs.windows.result }}
+        run: |
+          printf 'Forgejo integration: %s\n' "${INTEGRATION_RESULT}"
+          printf 'Quality suite: %s\n' "${QUALITY_RESULT}"
+          printf 'Python matrix: %s\n' "${PYTHON_RESULT}"
+          printf 'Windows matrix: %s\n' "${WINDOWS_RESULT}"
+
+          if [ "${INTEGRATION_RESULT}" != "success" ] || \
+             [ "${QUALITY_RESULT}" != "success" ] || \
+             [ "${PYTHON_RESULT}" != "success" ] || \
+             [ "${WINDOWS_RESULT}" != "success" ]; then
+            exit 1
+          fi
