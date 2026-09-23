@@ -25,7 +25,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: "24"
+          node-version: "24.21.0"
 
       - name: Install forge-publish
         run: python -m pip install -e .
@@ -62,7 +62,7 @@ jobs:
             --env FORGEJO__server__HTTP_PORT=3000 \
             --env FORGEJO__server__CERT_FILE=/data/cert.pem \
             --env FORGEJO__server__KEY_FILE=/data/key.pem \
-            codeberg.org/forgejo/forgejo:16.0.5
+            codeberg.org/forgejo/forgejo:16.0.5@sha256:cf5f5ae6acf2ababca0ee3d255705b83a47f35b25e07fc931d694d60664053fe
 
       - name: Wait for Forgejo
         run: |
@@ -139,7 +139,11 @@ jobs:
           {
             "name": "forge-publish-integration-npm",
             "version": "1.0.0",
-            "description": "forge-publish integration test package"
+            "description": "forge-publish integration test package",
+            "publishConfig": {
+              "registry": "https://registry.invalid/",
+              "strict-ssl": false
+            }
           }
           EOF
 
