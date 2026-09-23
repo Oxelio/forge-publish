@@ -31,6 +31,11 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
       - name: Install forge-publish
         run: python -m pip install -e .
 
@@ -131,6 +136,32 @@ jobs:
             --package integration-generic \
             --version 1.0.0 \
             --insecure
+
+      - name: Publish NPM package
+        env:
+          NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/forgejo/cert.pem
+        run: |
+          package_root="${RUNNER_TEMP}/npm-package"
+          mkdir -p "${package_root}"
+
+          cat > "${package_root}/package.json" <<'EOF'
+          {
+            "name": "forge-publish-integration-npm",
+            "version": "1.0.0",
+            "description": "forge-publish integration test package"
+          }
+          EOF
+
+          forge-publish npm "${package_root}"
+
+      - name: Reject invalid authentication
+        run: |
+          printf 'invalid auth integration\n' > "${RUNNER_TEMP}/invalid-auth.bin"
+
+          if FORGE_PUBLISH_TOKEN=invalid-token forge-publish generic             "${RUNNER_TEMP}/invalid-auth.bin"             --package invalid-auth             --version 1.0.0             --insecure; then
+            echo "Expected Forgejo to reject invalid credentials." >&2
+            exit 1
+          fi
 
       - name: Build Debian fixture
         run: |
