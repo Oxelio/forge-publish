@@ -25,7 +25,7 @@ Typical locations are:
 
 - Linux: `~/.config/forge-publish/config.toml`
 - macOS: `~/Library/Application Support/forge-publish/config.toml`
-- Windows: `%LOCALAPPDATA%\\forge-publish\\config.toml`
+- Windows: `%LOCALAPPDATA%\forge-publish\config.toml`
 
 On Linux, `XDG_CONFIG_HOME` is respected.
 
