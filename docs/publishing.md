@@ -70,7 +70,7 @@ forge-publish npm ./my-package
 
 The package must contain a valid `package.json` with a name and version.
 
-The package is first packed without Forgejo credentials. The generated archive is then published with a temporary authentication file and lifecycle scripts disabled during the authenticated publish step.
+The package is first packed without Forgejo credentials. The generated archive is then published from an isolated temporary directory with a temporary authentication file, TLS verification forced on, and lifecycle scripts disabled during the authenticated publish step. Project-local NPM configuration therefore cannot override the Forgejo token or disable TLS verification for that publish.
 
 ## Dry-run
 
