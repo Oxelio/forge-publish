@@ -2,15 +2,26 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 from ..client import ForgejoClient
 from ..config import TOKEN_ENV_VAR
 from ..errors import PackageError
+
+MIN_NPM_VERSION = (10, 5, 2)
+MIN_NPM_VERSION_TEXT = ".".join(str(part) for part in MIN_NPM_VERSION)
+NPM_VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
+NPM_TOKEN_ENV_VARS = {
+    TOKEN_ENV_VAR.casefold(),
+    "npm_token",
+    "node_auth_token",
+}
 
 
 def read_package_json(directory: Path) -> dict[str, object]:
@@ -57,6 +68,62 @@ def _write_temporary_npmrc(
         pass
 
     return npmrc
+
+
+def _sanitize_npm_environment(
+    environment: Mapping[str, str],
+) -> dict[str, str]:
+    sanitized: dict[str, str] = {}
+
+    for key, value in environment.items():
+        normalized_key = key.casefold()
+
+        if normalized_key in NPM_TOKEN_ENV_VARS:
+            continue
+
+        if normalized_key.startswith("npm_config_"):
+            continue
+
+        sanitized[key] = value
+
+    return sanitized
+
+
+def _get_npm_version(
+    npm_executable: str,
+    *,
+    environment: dict[str, str],
+) -> str:
+    try:
+        result = subprocess.run(
+            [npm_executable, "--version"],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise PackageError(
+            f"npm --version failed with exit code {exc.returncode}"
+        ) from exc
+    except OSError as exc:
+        raise PackageError(f"Unable to execute npm --version: {exc}") from exc
+
+    return result.stdout.strip()
+
+
+def _require_supported_npm(version: str) -> None:
+    match = NPM_VERSION_PATTERN.fullmatch(version)
+
+    if match is None:
+        raise PackageError(f"Unable to determine npm version from {version!r}.")
+
+    parsed_version = tuple(int(part) for part in match.groups())
+
+    if parsed_version < MIN_NPM_VERSION:
+        raise PackageError(
+            f"npm {MIN_NPM_VERSION_TEXT} or newer is required; found {version}."
+        )
 
 
 def _run_npm(
@@ -129,8 +196,12 @@ def publish(
     if npm_executable is None:
         raise PackageError("npm is not installed or not available in PATH.")
 
-    environment = os.environ.copy()
-    environment.pop(TOKEN_ENV_VAR, None)
+    environment = _sanitize_npm_environment(os.environ)
+    npm_version = _get_npm_version(
+        npm_executable,
+        environment=environment,
+    )
+    _require_supported_npm(npm_version)
 
     try:
         with tempfile.TemporaryDirectory(
