@@ -74,7 +74,7 @@ Pull requests run:
 
 The repository ruleset continues to require the `Quality checks` status. CI now runs the main quality suite, Forgejo integration, Linux compatibility matrix, and Windows compatibility matrix in parallel. A final job named `Quality checks` depends on all four groups and fails unless every group succeeds.
 
-The Forgejo integration workflow starts a digest-pinned Forgejo 16.0.5 image with an ephemeral self-signed TLS certificate and validates real Generic, Debian, and NPM publication through the CLI. Node.js is pinned to 24.21.0 for this integration environment. The workflow also verifies that Forgejo rejects invalid credentials.
+The Forgejo integration workflow starts a digest-pinned Forgejo 16.0.5 image with an ephemeral self-signed TLS certificate and validates real Generic, Debian, and NPM publication through the CLI. Node.js is pinned to 24.21.0, and the NPM publication test explicitly installs and verifies npm 10.5.2 so the documented minimum version is exercised against a real Forgejo registry. The workflow also verifies that Forgejo rejects invalid credentials.
 
 For NPM, the integration fixture deliberately includes conflicting project-local NPM authentication and TLS settings plus conflicting `publishConfig.registry` and `publishConfig.strict-ssl` values. The publish must still use the temporary Forgejo credentials and verified TLS through Node's `NODE_EXTRA_CA_CERTS` mechanism.
 
