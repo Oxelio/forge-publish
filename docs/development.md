@@ -17,7 +17,7 @@ Activate the virtual environment using the normal command for your shell.
 pytest
 ```
 
-Coverage and branch coverage are enabled through `pyproject.toml`, with an enforced minimum of 80%.
+Coverage and branch coverage are enabled through `pyproject.toml`, with an enforced minimum of 85%.
 
 Generate an HTML report with:
 
@@ -72,11 +72,15 @@ Pull requests run:
 - the full quality suite on Python 3.14
 - Windows compatibility on Python 3.11 and 3.14
 
-The `Quality checks` job remains the required status check used by the repository ruleset.
+The `Quality checks` job remains the required status check used by the repository ruleset. It depends on the reusable Forgejo integration workflow and fails explicitly unless that integration succeeds, so the required check cannot pass when real Forgejo publication is broken.
 
-A separate Forgejo integration workflow starts Forgejo 16.0.5 in Docker with an ephemeral self-signed TLS certificate and validates real Generic, Debian, and NPM publication through the CLI. It also verifies that Forgejo rejects invalid credentials.
+The Forgejo integration workflow starts Forgejo 16.0.5 in Docker with an ephemeral self-signed TLS certificate and validates real Generic, Debian, and NPM publication through the CLI. It also verifies that Forgejo rejects invalid credentials.
 
-For NPM, the integration test keeps TLS verification enabled and trusts the ephemeral CI certificate through Node's `NODE_EXTRA_CA_CERTS` mechanism.
+For NPM, the integration fixture deliberately includes conflicting project-local NPM authentication and TLS settings. The publish must still use the temporary Forgejo credentials and verified TLS through Node's `NODE_EXTRA_CA_CERTS` mechanism.
+
+Distribution verification installs the built wheel into a clean virtual environment and runs `pip check` before exercising the installed CLI. Release dependencies are validated with `pip check` as well.
+
+Third-party GitHub Actions used by CI and release workflows are pinned to full commit SHAs, with the corresponding major version documented inline.
 
 ## Adding a publisher
 
