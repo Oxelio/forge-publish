@@ -27,15 +27,27 @@ The workflow:
 
 Release tooling is declared once in the `release` optional dependency group in `pyproject.toml`. The workflow installs `.[release]`, so Python Semantic Release and build-tool versions are not duplicated in workflow YAML.
 
-## Branch ruleset prerequisite
+## GitHub App and branch ruleset
 
-The repository currently requires changes to `main` to arrive through pull requests. Python Semantic Release normally creates and pushes a release commit directly.
+Automatic releases use a dedicated GitHub App rather than a long-lived personal access token.
 
-Before enabling unattended releases, configure a dedicated GitHub App or release actor in the ruleset bypass list with permission to push the generated release commit and tag directly to `main`. Keep normal contributors subject to the repository rules.
+Create a GitHub App for releases with repository access limited to this repository and grant it:
 
-The current ruleset requires both pull requests and the `Quality checks` status check. The release actor therefore needs a bypass mode that permits the automated release push despite every branch rule that would otherwise block that push, not only the pull-request requirement.
+- **Contents: Read and write**
+- **Metadata: Read-only** (automatic)
 
-The workflow uses the `RELEASE_TOKEN` repository secret when it is configured and falls back to `GITHUB_TOKEN` otherwise. For protected `main`, configure `RELEASE_TOKEN` with a token belonging to that dedicated bypass-enabled release actor. Do not weaken the ruleset globally.
+The release process does not need **Workflows: Write** because the generated release commit only updates release metadata such as `pyproject.toml` and `CHANGELOG.md`. If release automation is later changed to modify files under `.github/workflows/`, review the App permissions before doing so.
+
+Install the App on `forge-publish`, then configure:
+
+- repository variable `RELEASE_APP_CLIENT_ID` with the App client ID
+- repository secret `RELEASE_APP_PRIVATE_KEY` with a generated private key for the App
+
+The workflow uses `actions/create-github-app-token@v3` to mint a short-lived installation token for each release run.
+
+The repository ruleset currently requires pull requests and the `Quality checks` status check on `main`. Add the release GitHub App to the ruleset **Bypass list** with **Always allow**. Do not use **For pull requests only**, because Python Semantic Release must push its generated release commit and tag directly.
+
+Keep normal users subject to the existing ruleset.
 
 ## Local verification
 
