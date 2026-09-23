@@ -158,7 +158,9 @@ def test_sanitize_npm_environment_removes_configuration_and_tokens() -> None:
     "version",
     [
         "10.5.2",
+        "10.5.2+build.1",
         "10.5.3",
+        "10.5.3-beta.1",
         "11.0.0",
         "12.1.0",
     ],
