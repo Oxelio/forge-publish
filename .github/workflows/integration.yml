@@ -158,7 +158,11 @@ jobs:
         run: |
           printf 'invalid auth integration\n' > "${RUNNER_TEMP}/invalid-auth.bin"
 
-          if FORGE_PUBLISH_TOKEN=invalid-token forge-publish generic             "${RUNNER_TEMP}/invalid-auth.bin"             --package invalid-auth             --version 1.0.0             --insecure; then
+          if FORGE_PUBLISH_TOKEN=invalid-token forge-publish generic \
+            "${RUNNER_TEMP}/invalid-auth.bin" \
+            --package invalid-auth \
+            --version 1.0.0 \
+            --insecure; then
             echo "Expected Forgejo to reject invalid credentials." >&2
             exit 1
           fi
