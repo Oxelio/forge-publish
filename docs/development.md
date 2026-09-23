@@ -6,7 +6,7 @@ Python 3.11 through 3.14 are supported.
 
 ```bash
 python -m venv .venv
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,release]"
 ```
 
 Activate the virtual environment using the normal command for your shell.
@@ -68,14 +68,15 @@ Pull requests run:
 - Ruff formatting verification
 - unit tests with coverage
 - wheel and sdist build verification
-- Python 3.11, 3.12, 3.13, and 3.14 compatibility on Linux
+- Python 3.11, 3.12, and 3.13 compatibility jobs on Linux
+- the full quality suite on Python 3.14
 - Windows compatibility on Python 3.11 and 3.14
 
 The `Quality checks` job remains the required status check used by the repository ruleset.
 
-A separate Forgejo integration workflow starts Forgejo 16.0.5 in Docker with an ephemeral self-signed TLS certificate and validates real Generic and Debian publication through the CLI.
+A separate Forgejo integration workflow starts Forgejo 16.0.5 in Docker with an ephemeral self-signed TLS certificate and validates real Generic, Debian, and NPM publication through the CLI. It also verifies that Forgejo rejects invalid credentials.
 
-NPM remains covered by unit tests in the regular CI because authenticated NPM publication intentionally does not expose an insecure-TLS mode.
+For NPM, the integration test keeps TLS verification enabled and trusts the ephemeral CI certificate through Node's `NODE_EXTRA_CA_CERTS` mechanism.
 
 ## Adding a publisher
 
