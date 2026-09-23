@@ -335,11 +335,7 @@ def test_rejects_invalid_compressed_control_archive(tmp_path: Path) -> None:
         ),
         (b"Package: servcli\n\nVersion: 1.9.3-0\nArchitecture: i386\n"),
         b" continuation-without-field\n",
-        (
-            b"Package Name: servcli\n"
-            b"Version: 1.9.3-0\n"
-            b"Architecture: i386\n"
-        ),
+        (b"Package Name: servcli\nVersion: 1.9.3-0\nArchitecture: i386\n"),
     ],
 )
 def test_rejects_malformed_debian_control(
