@@ -43,7 +43,7 @@ Install the App on `forge-publish`, then configure:
 - repository variable `RELEASE_APP_CLIENT_ID` with the App client ID
 - repository secret `RELEASE_APP_PRIVATE_KEY` with a generated private key for the App
 
-The workflow uses `actions/create-github-app-token@v3` to mint a short-lived installation token for each release run.
+The workflow uses `actions/create-github-app-token` to mint a short-lived installation token for each release run. Release workflow Actions are pinned to full commit SHAs rather than mutable tags.
 
 The repository ruleset currently requires pull requests and the `Quality checks` status check on `main`. Add the release GitHub App to the ruleset **Bypass list** with **Always allow**. Do not use **For pull requests only**, because Python Semantic Release must push its generated release commit and tag directly.
 
