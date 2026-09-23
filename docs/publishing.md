@@ -68,9 +68,9 @@ or another directory:
 forge-publish npm ./my-package
 ```
 
-The package must contain a valid `package.json` with a name and version.
+The package must contain a valid `package.json` with a name and version. NPM publishing requires stable npm 10.5.2 or newer so command-line publication settings reliably take precedence over `publishConfig` values embedded in the package. A prerelease of the minimum version, such as `10.5.2-rc.0`, is not considered sufficient.
 
-The package is first packed without Forgejo credentials. The generated archive is then published with a temporary authentication file and lifecycle scripts disabled during the authenticated publish step.
+The package is first packed without Forgejo credentials. The generated archive is then published from an isolated temporary directory with a temporary authentication file, TLS verification forced on, lifecycle scripts disabled, and inherited `npm_config_*` settings removed. Project-local `.npmrc`, environment-level npm configuration, and conflicting `publishConfig.registry` or `publishConfig.strict-ssl` values therefore cannot redirect the authenticated publish or disable TLS verification.
 
 ## Dry-run
 

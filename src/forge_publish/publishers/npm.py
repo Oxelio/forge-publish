@@ -2,15 +2,28 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 from ..client import ForgejoClient
 from ..config import TOKEN_ENV_VAR
 from ..errors import PackageError
+
+MIN_NPM_VERSION = (10, 5, 2)
+MIN_NPM_VERSION_TEXT = ".".join(str(part) for part in MIN_NPM_VERSION)
+NPM_VERSION_PATTERN = re.compile(
+    r"^(\d+)\.(\d+)\.(\d+)(?P<prerelease>-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
+)
+NPM_TOKEN_ENV_VARS = {
+    TOKEN_ENV_VAR.casefold(),
+    "npm_token",
+    "node_auth_token",
+}
 
 
 def read_package_json(directory: Path) -> dict[str, object]:
@@ -46,7 +59,7 @@ def _write_temporary_npmrc(
     npmrc = directory / ".npmrc"
 
     npmrc.write_text(
-        f"registry={registry}\n{_npm_auth_key(registry)}={token}\n",
+        (f"registry={registry}\nstrict-ssl=true\n{_npm_auth_key(registry)}={token}\n"),
         encoding="utf-8",
     )
 
@@ -57,6 +70,87 @@ def _write_temporary_npmrc(
         pass
 
     return npmrc
+
+
+def _sanitize_npm_environment(
+    environment: Mapping[str, str],
+) -> dict[str, str]:
+    sanitized: dict[str, str] = {}
+
+    for key, value in environment.items():
+        normalized_key = key.casefold()
+
+        if normalized_key in NPM_TOKEN_ENV_VARS:
+            continue
+
+        if normalized_key.startswith("npm_config_"):
+            continue
+
+        sanitized[key] = value
+
+    return sanitized
+
+
+def _get_npm_version(
+    npm_executable: str,
+    *,
+    environment: dict[str, str],
+) -> str:
+    try:
+        result = subprocess.run(
+            [npm_executable, "--version"],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise PackageError(
+            f"npm --version failed with exit code {exc.returncode}"
+        ) from exc
+    except OSError as exc:
+        raise PackageError(f"Unable to execute npm --version: {exc}") from exc
+
+    return result.stdout.strip()
+
+
+def _require_supported_npm(version: str) -> None:
+    match = NPM_VERSION_PATTERN.fullmatch(version)
+
+    if match is None:
+        raise PackageError(f"Unable to determine npm version from {version!r}.")
+
+    parsed_version = tuple(int(part) for part in match.groups()[:3])
+    is_prerelease = match.group("prerelease") is not None
+
+    if parsed_version < MIN_NPM_VERSION or (
+        parsed_version == MIN_NPM_VERSION and is_prerelease
+    ):
+        raise PackageError(
+            f"npm {MIN_NPM_VERSION_TEXT} or newer is required; found {version}."
+        )
+
+
+def _run_npm(
+    command: list[str],
+    *,
+    cwd: Path,
+    environment: dict[str, str],
+    operation: str,
+) -> None:
+    try:
+        subprocess.run(
+            command,
+            cwd=cwd,
+            check=True,
+            env=environment,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise PackageError(
+            f"npm {operation} failed with exit code {exc.returncode}"
+        ) from exc
+    except OSError as exc:
+        raise PackageError(f"Unable to execute npm {operation}: {exc}") from exc
 
 
 def publish(
@@ -93,7 +187,7 @@ def publish(
         print("npm pack --pack-destination=<temporary directory>")
         print(
             f"npm publish <packed .tgz> --registry={registry} "
-            "--userconfig=<temporary .npmrc> --ignore-scripts"
+            "--userconfig=<temporary .npmrc> --strict-ssl=true --ignore-scripts"
         )
         return
 
@@ -107,8 +201,12 @@ def publish(
     if npm_executable is None:
         raise PackageError("npm is not installed or not available in PATH.")
 
-    environment = os.environ.copy()
-    environment.pop(TOKEN_ENV_VAR, None)
+    environment = _sanitize_npm_environment(os.environ)
+    npm_version = _get_npm_version(
+        npm_executable,
+        environment=environment,
+    )
+    _require_supported_npm(npm_version)
 
     try:
         with tempfile.TemporaryDirectory(
@@ -116,21 +214,16 @@ def publish(
         ) as temporary_directory:
             temporary_path = Path(temporary_directory)
 
-            try:
-                subprocess.run(
-                    [
-                        npm_executable,
-                        "pack",
-                        f"--pack-destination={temporary_path}",
-                    ],
-                    cwd=directory,
-                    check=True,
-                    env=environment,
-                )
-            except subprocess.CalledProcessError as exc:
-                raise PackageError(
-                    f"npm pack failed with exit code {exc.returncode}"
-                ) from exc
+            _run_npm(
+                [
+                    npm_executable,
+                    "pack",
+                    f"--pack-destination={temporary_path}",
+                ],
+                cwd=directory,
+                environment=environment,
+                operation="pack",
+            )
 
             archives = list(temporary_path.glob("*.tgz"))
             if len(archives) != 1:
@@ -144,29 +237,23 @@ def publish(
                 token,
             )
 
-            try:
-                subprocess.run(
-                    [
-                        npm_executable,
-                        "publish",
-                        str(archives[0]),
-                        f"--registry={registry}",
-                        f"--userconfig={npmrc}",
-                        "--ignore-scripts",
-                    ],
-                    cwd=directory,
-                    check=True,
-                    env=environment,
-                )
-            except subprocess.CalledProcessError as exc:
-                raise PackageError(
-                    f"npm publish failed with exit code {exc.returncode}"
-                ) from exc
+            _run_npm(
+                [
+                    npm_executable,
+                    "publish",
+                    str(archives[0]),
+                    f"--registry={registry}",
+                    f"--userconfig={npmrc}",
+                    "--strict-ssl=true",
+                    "--ignore-scripts",
+                ],
+                cwd=temporary_path,
+                environment=environment,
+                operation="publish",
+            )
 
     except OSError as exc:
-        raise PackageError(
-            "Unable to create or use the temporary npm configuration."
-        ) from exc
+        raise PackageError("Unable to create or use temporary npm files.") from exc
 
     print()
     print("✓ NPM package published successfully.")
