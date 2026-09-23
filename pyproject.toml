@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,10 +7,13 @@ name = "forge-publish"
 version = "0.1.0"
 description = "CLI for publishing packages to Forgejo package registries"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 dependencies = [
     "click>=8.1",
     "keyring>=25",
+    "platformdirs>=4.3",
     "requests>=2.31",
     "tomli-w>=1.0",
     "zstandard>=0.23",
@@ -18,12 +21,15 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "build>=1.2",
     "pytest>=8",
     "pytest-cov>=7",
     "ruff>=0.13",
     "pre-commit",
     "commitizen",
+]
+release = [
+    "build>=1.2",
+    "python-semantic-release==10.6.2",
 ]
 
 [project.scripts]
@@ -41,3 +47,17 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-fail-under=80",
 ]
+
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+commit_parser = "conventional"
+tag_format = "v{version}"
+allow_zero_version = true
+major_on_zero = false
+commit_message = "chore(release): {version} [skip ci]"
+build_command = "python -m build --sdist --wheel ."
+
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false

@@ -5,16 +5,17 @@ import stat
 import tomllib
 from dataclasses import dataclass, field
 from getpass import getpass
-from pathlib import Path
 from urllib.parse import urlsplit
 
 import keyring
 import tomli_w
 from keyring.errors import KeyringError
+from platformdirs import user_config_path
 
 from .errors import ConfigurationError
 
-CONFIG_DIR = Path.home() / ".config" / "forge-publish"
+APP_NAME = "forge-publish"
+CONFIG_DIR = user_config_path(APP_NAME, appauthor=False)
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 KEYRING_SERVICE = "forge-publish"
 TOKEN_ENV_VAR = "FORGE_PUBLISH_TOKEN"
