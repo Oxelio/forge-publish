@@ -111,3 +111,7 @@ CI validates Python 3.11 through 3.14 and Windows compatibility.
 - automated tests and release tooling
 
 A plugin or factory architecture is not required for simple publisher additions.
+
+## License
+
+This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
