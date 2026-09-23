@@ -46,7 +46,11 @@ def _write_temporary_npmrc(
     npmrc = directory / ".npmrc"
 
     npmrc.write_text(
-        f"registry={registry}\n{_npm_auth_key(registry)}={token}\n",
+        (
+            f"registry={registry}\n"
+            "strict-ssl=true\n"
+            f"{_npm_auth_key(registry)}={token}\n"
+        ),
         encoding="utf-8",
     )
 
@@ -57,6 +61,28 @@ def _write_temporary_npmrc(
         pass
 
     return npmrc
+
+
+def _run_npm(
+    command: list[str],
+    *,
+    cwd: Path,
+    environment: dict[str, str],
+    operation: str,
+) -> None:
+    try:
+        subprocess.run(
+            command,
+            cwd=cwd,
+            check=True,
+            env=environment,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise PackageError(
+            f"npm {operation} failed with exit code {exc.returncode}"
+        ) from exc
+    except OSError as exc:
+        raise PackageError(f"Unable to execute npm {operation}: {exc}") from exc
 
 
 def publish(
@@ -93,7 +119,7 @@ def publish(
         print("npm pack --pack-destination=<temporary directory>")
         print(
             f"npm publish <packed .tgz> --registry={registry} "
-            "--userconfig=<temporary .npmrc> --ignore-scripts"
+            "--userconfig=<temporary .npmrc> --strict-ssl=true --ignore-scripts"
         )
         return
 
@@ -116,21 +142,16 @@ def publish(
         ) as temporary_directory:
             temporary_path = Path(temporary_directory)
 
-            try:
-                subprocess.run(
-                    [
-                        npm_executable,
-                        "pack",
-                        f"--pack-destination={temporary_path}",
-                    ],
-                    cwd=directory,
-                    check=True,
-                    env=environment,
-                )
-            except subprocess.CalledProcessError as exc:
-                raise PackageError(
-                    f"npm pack failed with exit code {exc.returncode}"
-                ) from exc
+            _run_npm(
+                [
+                    npm_executable,
+                    "pack",
+                    f"--pack-destination={temporary_path}",
+                ],
+                cwd=directory,
+                environment=environment,
+                operation="pack",
+            )
 
             archives = list(temporary_path.glob("*.tgz"))
             if len(archives) != 1:
@@ -144,28 +165,24 @@ def publish(
                 token,
             )
 
-            try:
-                subprocess.run(
-                    [
-                        npm_executable,
-                        "publish",
-                        str(archives[0]),
-                        f"--registry={registry}",
-                        f"--userconfig={npmrc}",
-                        "--ignore-scripts",
-                    ],
-                    cwd=directory,
-                    check=True,
-                    env=environment,
-                )
-            except subprocess.CalledProcessError as exc:
-                raise PackageError(
-                    f"npm publish failed with exit code {exc.returncode}"
-                ) from exc
+            _run_npm(
+                [
+                    npm_executable,
+                    "publish",
+                    str(archives[0]),
+                    f"--registry={registry}",
+                    f"--userconfig={npmrc}",
+                    "--strict-ssl=true",
+                    "--ignore-scripts",
+                ],
+                cwd=temporary_path,
+                environment=environment,
+                operation="publish",
+            )
 
     except OSError as exc:
         raise PackageError(
-            "Unable to create or use the temporary npm configuration."
+            "Unable to create or use temporary npm files."
         ) from exc
 
     print()
