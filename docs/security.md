@@ -26,7 +26,7 @@ The `--insecure` option for Debian and Generic packages disables certificate val
 
 NPM publication uses two phases:
 
-1. `npm pack` runs before any Forgejo authentication file is created and without `FORGE_PUBLISH_TOKEN` in the subprocess environment.
-2. `npm publish` receives a temporary `.npmrc` and publishes the generated archive with `--ignore-scripts`.
+1. `npm pack` runs in the package directory before any Forgejo authentication file is created and without `FORGE_PUBLISH_TOKEN` in the subprocess environment.
+2. `npm publish` runs from the temporary directory against the packed `.tgz`, receives a temporary `.npmrc`, forces `--strict-ssl=true`, and uses `--ignore-scripts`.
 
-The temporary archive and authentication file are stored outside the project directory and removed automatically.
+Running the authenticated publish outside the package directory prevents a project-local `.npmrc` from overriding the temporary Forgejo credentials or TLS policy. The temporary archive and authentication file are removed automatically.
