@@ -118,9 +118,12 @@ def _require_supported_npm(version: str) -> None:
     if match is None:
         raise PackageError(f"Unable to determine npm version from {version!r}.")
 
-    parsed_version = tuple(int(part) for part in match.groups())
+    parsed_version = tuple(int(part) for part in match.groups()[:3])
+    is_prerelease = match.group("prerelease") is not None
 
-    if parsed_version < MIN_NPM_VERSION:
+    if parsed_version < MIN_NPM_VERSION or (
+        parsed_version == MIN_NPM_VERSION and is_prerelease
+    ):
         raise PackageError(
             f"npm {MIN_NPM_VERSION_TEXT} or newer is required; found {version}."
         )
