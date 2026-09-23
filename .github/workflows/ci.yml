@@ -15,23 +15,38 @@ permissions:
   contents: read
 
 jobs:
+  integration:
+    name: Forgejo integration
+    if: ${{ github.event.pull_request.draft == false }}
+    uses: ./.github/workflows/integration.yml
+
   quality:
     name: Quality checks
-    if: ${{ github.event.pull_request.draft == false }}
+    needs:
+      - integration
+    if: ${{ always() && github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
+      - name: Require Forgejo integration
+        if: ${{ needs.integration.result != 'success' }}
+        run: |
+          echo "Forgejo integration did not succeed." >&2
+          exit 1
+
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.14"
 
       - name: Install dependencies
-        run: python -m pip install -e ".[dev,release]"
+        run: |
+          python -m pip install -e ".[dev,release]"
+          python -m pip check
 
       - name: Run Ruff lint
         run: ruff check .
@@ -45,11 +60,14 @@ jobs:
       - name: Build distribution
         run: python -m build
 
-      - name: Verify built wheel
+      - name: Verify built wheel in clean environment
         run: |
-          python -m pip install --force-reinstall dist/*.whl
-          forge-publish --version
-          python -m forge_publish --help
+          wheel_venv="${RUNNER_TEMP}/forge-publish-wheel"
+          python -m venv "${wheel_venv}"
+          "${wheel_venv}/bin/python" -m pip install dist/*.whl
+          "${wheel_venv}/bin/python" -m pip check
+          "${wheel_venv}/bin/forge-publish" --version
+          "${wheel_venv}/bin/python" -m forge_publish --help
 
   python:
     name: Python ${{ matrix.python-version }}
@@ -66,10 +84,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -93,10 +111,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: ${{ matrix.python-version }}
 
