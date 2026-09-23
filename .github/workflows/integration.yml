@@ -30,6 +30,11 @@ jobs:
       - name: Install forge-publish
         run: python -m pip install -e .
 
+      - name: Install minimum supported npm
+        run: |
+          npm install --global npm@10.5.2
+          test "$(npm --version)" = "10.5.2"
+
       - name: Prepare Forgejo TLS files
         run: |
           mkdir -p "${RUNNER_TEMP}/forgejo"
