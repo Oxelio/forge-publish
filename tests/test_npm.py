@@ -175,6 +175,9 @@ def test_accepts_supported_npm_versions(version: str) -> None:
         "9.9.9",
         "10.4.9",
         "10.5.1",
+        "10.5.2-alpha.1",
+        "10.5.2-beta.1",
+        "10.5.2-rc.0",
     ],
 )
 def test_rejects_unsupported_npm_versions(version: str) -> None:
