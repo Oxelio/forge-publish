@@ -196,7 +196,9 @@ def test_npm_reports_pack_execution_failure(tmp_path: Path, monkeypatch) -> None
 
     monkeypatch.setattr(npm.subprocess, "run", fail_pack)
 
-    with pytest.raises(PackageError, match="Unable to execute npm pack: permission denied"):
+    with pytest.raises(
+        PackageError, match="Unable to execute npm pack: permission denied"
+    ):
         npm.publish(
             client=FakeClient(),
             directory=package_dir,
@@ -267,7 +269,9 @@ def test_npm_reports_temporary_file_failure(tmp_path: Path, monkeypatch) -> None
 
     monkeypatch.setattr(npm.Path, "write_text", fail_write)
 
-    with pytest.raises(PackageError, match="Unable to create or use temporary npm files"):
+    with pytest.raises(
+        PackageError, match="Unable to create or use temporary npm files"
+    ):
         npm.publish(
             client=FakeClient(),
             directory=package_dir,
