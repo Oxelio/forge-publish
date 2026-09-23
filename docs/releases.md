@@ -25,15 +25,17 @@ The workflow:
 7. creates the GitHub Release
 8. uploads the distribution artifacts
 
-Python Semantic Release is pinned to version 10.6.2 in the project and workflow.
+Release tooling is declared once in the `release` optional dependency group in `pyproject.toml`. The workflow installs `.[release]`, so Python Semantic Release and build-tool versions are not duplicated in workflow YAML.
 
 ## Branch ruleset prerequisite
 
 The repository currently requires changes to `main` to arrive through pull requests. Python Semantic Release normally creates and pushes a release commit directly.
 
-Before enabling unattended releases, configure a dedicated GitHub App or release actor in the ruleset bypass list with permission to perform the release push. Keep normal contributors subject to the pull-request requirement.
+Before enabling unattended releases, configure a dedicated GitHub App or release actor in the ruleset bypass list with permission to push the generated release commit and tag directly to `main`. Keep normal contributors subject to the repository rules.
 
-The workflow uses the `RELEASE_TOKEN` repository secret when it is configured and falls back to `GITHUB_TOKEN` otherwise. For the current protected `main` branch, configure `RELEASE_TOKEN` with a token belonging to a dedicated release actor that is allowed to bypass the pull-request rule. Do not weaken the ruleset globally.
+The current ruleset requires both pull requests and the `Quality checks` status check. The release actor therefore needs a bypass mode that permits the automated release push despite every branch rule that would otherwise block that push, not only the pull-request requirement.
+
+The workflow uses the `RELEASE_TOKEN` repository secret when it is configured and falls back to `GITHUB_TOKEN` otherwise. For protected `main`, configure `RELEASE_TOKEN` with a token belonging to that dedicated bypass-enabled release actor. Do not weaken the ruleset globally.
 
 ## Local verification
 
