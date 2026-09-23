@@ -45,7 +45,7 @@ addopts = [
     "--cov=forge_publish",
     "--cov-branch",
     "--cov-report=term-missing",
-    "--cov-fail-under=80",
+    "--cov-fail-under=85",
 ]
 
 
