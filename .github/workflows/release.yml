@@ -23,13 +23,13 @@ jobs:
     steps:
       - name: Create release token
         id: app-token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - name: Checkout release branch
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
@@ -39,7 +39,7 @@ jobs:
         run: git reset --hard "${GITHUB_SHA}"
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.14"
 
@@ -47,6 +47,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[release]"
+          python -m pip check
 
       - name: Create semantic release
         id: release
