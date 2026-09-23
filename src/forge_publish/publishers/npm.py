@@ -46,11 +46,7 @@ def _write_temporary_npmrc(
     npmrc = directory / ".npmrc"
 
     npmrc.write_text(
-        (
-            f"registry={registry}\n"
-            "strict-ssl=true\n"
-            f"{_npm_auth_key(registry)}={token}\n"
-        ),
+        (f"registry={registry}\nstrict-ssl=true\n{_npm_auth_key(registry)}={token}\n"),
         encoding="utf-8",
     )
 
@@ -181,9 +177,7 @@ def publish(
             )
 
     except OSError as exc:
-        raise PackageError(
-            "Unable to create or use temporary npm files."
-        ) from exc
+        raise PackageError("Unable to create or use temporary npm files.") from exc
 
     print()
     print("✓ NPM package published successfully.")
