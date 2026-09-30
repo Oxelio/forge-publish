@@ -131,27 +131,37 @@ def test_npm_packs_without_credentials_before_authenticated_publish(
     assert not observed_archive.exists()
 
 
-def test_sanitize_npm_environment_removes_configuration_and_tokens() -> None:
+def test_sanitize_npm_environment_removes_tokens_and_all_npm_config() -> None:
     source = {
-        TOKEN_ENV_VAR: "forge-token",
-        "NPM_TOKEN": "npm-token",
-        "NODE_AUTH_TOKEN": "node-token",
+        "FoRgE_PuBlIsH_ToKeN": "forge-token",
+        "nPm_ToKeN": "npm-token",
+        "NoDe_AuTh_ToKeN": "node-token",
         "NPM_CONFIG_STRICT_SSL": "false",
+        "npm_config_registry": "https://environment.invalid/",
+        "NpM_CoNfIg_UsErCoNfIg": "/tmp/untrusted-npmrc",
         "npm_config_//forge.example.com/api/packages/Software/npm/:_authToken": (
             "environment-token"
         ),
+        "PATH": "/usr/bin",
+    }
+
+    sanitized = npm._sanitize_npm_environment(source)
+
+    assert sanitized == {"PATH": "/usr/bin"}
+
+
+def test_sanitize_npm_environment_preserves_network_and_trust_variables() -> None:
+    source = {
+        "HTTP_PROXY": "http://proxy.example.com",
         "HTTPS_PROXY": "https://proxy.example.com",
+        "NO_PROXY": "localhost,127.0.0.1",
         "NODE_EXTRA_CA_CERTS": "/tmp/ca.pem",
         "PATH": "/usr/bin",
     }
 
     sanitized = npm._sanitize_npm_environment(source)
 
-    assert sanitized == {
-        "HTTPS_PROXY": "https://proxy.example.com",
-        "NODE_EXTRA_CA_CERTS": "/tmp/ca.pem",
-        "PATH": "/usr/bin",
-    }
+    assert sanitized == source
 
 
 @pytest.mark.parametrize(
