@@ -15,7 +15,7 @@ The project focuses on explicit publication targets, secure credential handling,
 - Python 3.11 or newer
 - Access to a Forgejo instance
 - A Forgejo account and access token
-- Node.js and stable npm 10.5.2 or newer only when publishing NPM packages
+- Node.js and npm 10.5.2 or newer only when publishing NPM packages. Prereleases of the minimum 10.5.2 release, such as 10.5.2-rc.0, are not supported; prereleases of later versions, such as 10.5.3-beta.1, satisfy the version check.
 
 ## Installation
 
