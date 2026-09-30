@@ -25,7 +25,9 @@ The workflow:
 7. creates the GitHub Release
 8. uploads the distribution artifacts
 
-Release tooling is declared once in the `release` optional dependency group in `pyproject.toml`. The workflow installs `.[release]`, so Python Semantic Release and build-tool versions are not duplicated in workflow YAML.
+Release tooling is declared in the `release` optional dependency group in `pyproject.toml`. The release workflow pins pip and installs `.[release]` using `requirements/tooling.txt`, while isolated package builds use `requirements/build.txt`. This keeps the release environment and build backend deterministic without turning forge-publish's normal runtime dependency ranges into exact user-facing pins.
+
+Dependency updates are made through dedicated pull requests. Dependabot monitors the pip ecosystem weekly, and the exact constraints are reviewed together with the full CI and real Forgejo integration before merging.
 
 ## GitHub App and branch ruleset
 
