@@ -82,7 +82,7 @@ The Forgejo integration workflow starts a digest-pinned Forgejo 16.0.5 image wit
 
 For NPM, both compatibility publications deliberately include conflicting project-local NPM authentication and TLS settings plus conflicting `publishConfig.registry` and `publishConfig.strict-ssl` values. Each publish must still use the temporary Forgejo credentials and verified TLS through Node's `NODE_EXTRA_CA_CERTS` mechanism.
 
-Distribution verification installs the built wheel into a clean virtual environment and runs `pip check` before exercising the installed CLI. Release dependencies are validated with `pip check` as well.
+Distribution verification installs both the built wheel and the built source distribution into separate clean virtual environments, runs `pip check`, and exercises the installed CLI from each artifact. Release dependencies are validated with `pip check` as well.
 
 Development, CI, integration, and release environments use `requirements/tooling.txt` as an exact constraints set while `pyproject.toml` keeps compatible dependency ranges for normal forge-publish users. Isolated PEP 517 builds use the separate `requirements/build.txt` build constraint so the build backend is deterministic as well. pip itself is pinned in these controlled environments.
 

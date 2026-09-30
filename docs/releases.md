@@ -8,11 +8,15 @@ Python Semantic Release updates that value. At runtime, `forge_publish.__version
 
 Tags use the format `v{version}`.
 
-While the project remains below 1.0, zero-major releases are enabled and breaking changes keep the project in the `0.x` line. Change `major_on_zero` when the project is ready for 1.0.
+`forge-publish` no longer permits zero-major releases: `allow_zero_version` is disabled. The transition from the existing `0.1.0` release to the stable public contract is deliberately guarded so an unrelated push cannot become `1.0.0`.
 
 ## Automatic release
 
 A push to `main` runs `.github/workflows/release.yml`.
+
+While the checked-out project version is still `0.x`, the workflow refuses to create a release unless a major release is explicitly requested. The normal 1.0 readiness merge uses the commit marker `[release:major]`; a manual workflow dispatch can instead select `release_level=major`. In either case the workflow calls `semantic-release version --major`, making the transition to `1.0.0` explicit rather than deriving it from an unrelated commit.
+
+After the repository is at `1.0.0` or newer, normal pushes return to standard Conventional Commit version calculation. The explicit major override remains available for a deliberately requested future major release.
 
 The workflow:
 
