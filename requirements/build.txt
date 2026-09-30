@@ -1,0 +1,3 @@
+# Build-isolation constraints used with pip >= 25.3.
+# pip 26.2 no longer applies normal constraints to isolated build environments.
+setuptools==84.0.0

@@ -6,7 +6,11 @@ Python 3.11 through 3.14 are supported.
 
 ```bash
 python -m venv .venv
-python -m pip install -e ".[dev,release]"
+python -m pip install "pip==26.2.1"
+python -m pip install \
+    --constraint requirements/tooling.txt \
+    --build-constraint requirements/build.txt \
+    -e ".[dev,release]"
 ```
 
 Activate the virtual environment using the normal command for your shell.
@@ -80,7 +84,21 @@ For NPM, both compatibility publications deliberately include conflicting projec
 
 Distribution verification installs the built wheel into a clean virtual environment and runs `pip check` before exercising the installed CLI. Release dependencies are validated with `pip check` as well.
 
-Third-party GitHub Actions used by CI and release workflows are pinned to full commit SHAs, with the corresponding major version documented inline. Dependabot checks those GitHub Actions weekly so immutable pins can still be maintained through reviewable pull requests.
+Development, CI, integration, and release environments use `requirements/tooling.txt` as an exact constraints set while `pyproject.toml` keeps compatible dependency ranges for normal forge-publish users. Isolated PEP 517 builds use the separate `requirements/build.txt` build constraint so the build backend is deterministic as well. pip itself is pinned in these controlled environments.
+
+## Updating Python dependencies
+
+Python dependency updates should be isolated in a dedicated dependency PR:
+
+1. review the direct dependency ranges in `pyproject.toml`;
+2. refresh exact versions in `requirements/tooling.txt` and, when needed, `requirements/build.txt`;
+3. use a clean environment and install `.[dev,release]` with the candidate constraints;
+4. run `pip check`, the local quality checks, and the full GitHub Actions matrix;
+5. verify the real Forgejo integration before merging.
+
+The tooling constraints intentionally include the union of relevant conditional dependencies for Python 3.11-3.14, Linux, and Windows. A constraint does not cause a package to be installed by itself; it fixes the version only when that package is required in the current environment.
+
+Dependabot checks both the `pip` ecosystem and GitHub Actions weekly, so dependency changes arrive as reviewable pull requests rather than silently changing CI resolution. Third-party GitHub Actions remain pinned to full commit SHAs, with the corresponding major version documented inline.
 
 ## Adding a publisher
 

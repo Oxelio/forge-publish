@@ -84,7 +84,11 @@ All publishing commands support `--dry-run`.
 Install development dependencies:
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install "pip==26.2.1"
+python -m pip install \
+    --constraint requirements/tooling.txt \
+    --build-constraint requirements/build.txt \
+    -e ".[dev]"
 ```
 
 Run the checks:
