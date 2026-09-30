@@ -150,7 +150,7 @@ def test_sanitize_npm_environment_removes_tokens_and_all_npm_config() -> None:
     assert sanitized == {"PATH": "/usr/bin"}
 
 
-def test_sanitize_npm_environment_preserves_standard_network_and_trust_variables() -> None:
+def test_sanitize_npm_environment_preserves_network_and_trust_variables() -> None:
     source = {
         "HTTP_PROXY": "http://proxy.example.com",
         "HTTPS_PROXY": "https://proxy.example.com",
