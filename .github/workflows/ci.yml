@@ -40,6 +40,12 @@ jobs:
           python -m pip install -e ".[dev,release]"
           python -m pip check
 
+      - name: Report resolved dependencies
+        run: |
+          echo "FORGE_PUBLISH_FREEZE_BEGIN"
+          python -m pip freeze --all
+          echo "FORGE_PUBLISH_FREEZE_END"
+
       - name: Run Ruff lint
         run: ruff check .
 
@@ -85,6 +91,12 @@ jobs:
 
       - name: Install dependencies
         run: python -m pip install -e ".[dev]"
+
+      - name: Report resolved dependencies
+        run: |
+          echo "FORGE_PUBLISH_FREEZE_BEGIN"
+          python -m pip freeze --all
+          echo "FORGE_PUBLISH_FREEZE_END"
 
       - name: Run tests
         run: pytest
