@@ -30,10 +30,6 @@ jobs:
       - name: Install forge-publish
         run: python -m pip install -e .
 
-      - name: Install minimum supported npm
-        run: |
-          npm install --global npm@10.5.2
-          test "$(npm --version)" = "10.5.2"
 
       - name: Prepare Forgejo TLS files
         run: |
@@ -133,17 +129,17 @@ jobs:
             --version 1.0.0 \
             --insecure
 
-      - name: Publish NPM package
-        env:
-          NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/forgejo/cert.pem
+      - name: Prepare NPM integration fixtures
         run: |
-          package_root="${RUNNER_TEMP}/npm-package"
-          mkdir -p "${package_root}"
+          create_fixture() {
+            package_root="$1"
+            package_version="$2"
+            mkdir -p "${package_root}"
 
-          cat > "${package_root}/package.json" <<'EOF'
+            cat > "${package_root}/package.json" <<EOF
           {
             "name": "forge-publish-integration-npm",
-            "version": "1.0.0",
+            "version": "${package_version}",
             "description": "forge-publish integration test package",
             "publishConfig": {
               "registry": "https://registry.invalid/",
@@ -152,12 +148,31 @@ jobs:
           }
           EOF
 
-          cat > "${package_root}/.npmrc" <<'EOF'
+            cat > "${package_root}/.npmrc" <<'EOF'
           strict-ssl=false
           //localhost:3000/api/packages/integration/npm/:_authToken=project-token-must-not-win
           EOF
+          }
 
-          forge-publish npm "${package_root}"
+          create_fixture "${RUNNER_TEMP}/npm-package-bundled" "1.0.1"
+          create_fixture "${RUNNER_TEMP}/npm-package-minimum" "1.0.0"
+
+      - name: Publish NPM package with bundled npm
+        env:
+          NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/forgejo/cert.pem
+        run: |
+          printf 'Bundled npm version: %s\n' "$(npm --version)"
+          forge-publish npm "${RUNNER_TEMP}/npm-package-bundled"
+
+      - name: Install minimum supported npm
+        run: |
+          npm install --global npm@10.5.2
+          test "$(npm --version)" = "10.5.2"
+
+      - name: Publish NPM package with minimum npm
+        env:
+          NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/forgejo/cert.pem
+        run: forge-publish npm "${RUNNER_TEMP}/npm-package-minimum"
 
       - name: Reject invalid authentication
         run: |
