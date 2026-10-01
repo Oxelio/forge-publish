@@ -29,7 +29,7 @@ dev = [
 ]
 release = [
     "build>=1.2",
-    "python-semantic-release==10.6.2",
+    "python-semantic-release==10.7.0",
 ]
 
 [project.scripts]

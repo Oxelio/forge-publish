@@ -58,7 +58,7 @@ pytest==9.1.1
 pytest-cov==7.1.0
 python-discovery==1.6.1
 python-gitlab==8.6.0
-python-semantic-release==10.6.2
+python-semantic-release==10.7.0
 pywin32-ctypes==0.2.3
 PyYAML==6.0.3
 questionary==2.1.1
