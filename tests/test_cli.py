@@ -325,4 +325,3 @@ def test_config_invalid_utf8_is_reported_without_traceback(
     assert result.exit_code != 0
     assert "Error: Invalid UTF-8 configuration:" in result.output
     assert "Traceback" not in result.output
-
