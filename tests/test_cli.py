@@ -3,6 +3,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from forge_publish import cli
+from forge_publish import config as config_module
 from forge_publish.cli import main
 from forge_publish.config import Config
 
@@ -271,3 +272,56 @@ def test_npm_uses_current_directory_by_default(
 
     assert result.exit_code == 0, result.output
     assert captured["directory"] == Path(".")
+
+def test_npm_invalid_utf8_is_reported_without_traceback(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    package_dir = tmp_path / "package"
+    package_dir.mkdir()
+    (package_dir / "package.json").write_bytes(b"\xff")
+
+    monkeypatch.setattr(
+        cli,
+        "_create_client",
+        lambda *, dry_run, insecure: object(),
+    )
+
+    result = CliRunner().invoke(
+        main,
+        ["npm", str(package_dir), "--dry-run"],
+    )
+
+    assert result.exit_code != 0
+    assert "Error: Invalid UTF-8" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_config_invalid_utf8_is_reported_without_traceback(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_bytes(b"\xff")
+    monkeypatch.setattr(config_module, "CONFIG_FILE", config_file)
+
+    package = tmp_path / "package.bin"
+    package.write_bytes(b"data")
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "generic",
+            str(package),
+            "--package",
+            "example",
+            "--version",
+            "1.0.0",
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Error: Invalid UTF-8 configuration:" in result.output
+    assert "Traceback" not in result.output
+
