@@ -113,6 +113,10 @@ def _read_config_data() -> dict[str, object]:
     try:
         with CONFIG_FILE.open("rb") as file:
             data = tomllib.load(file)
+    except UnicodeDecodeError as exc:
+        raise ConfigurationError(
+            f"Invalid UTF-8 configuration: {CONFIG_FILE}"
+        ) from exc
     except tomllib.TOMLDecodeError as exc:
         raise ConfigurationError(f"Invalid TOML configuration: {CONFIG_FILE}") from exc
     except OSError as exc:
