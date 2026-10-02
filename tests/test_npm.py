@@ -470,4 +470,3 @@ def test_read_package_json_reports_invalid_utf8(tmp_path: Path) -> None:
         npm.read_package_json(package_dir)
 
     assert isinstance(exc_info.value.__cause__, UnicodeDecodeError)
-
