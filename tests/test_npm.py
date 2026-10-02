@@ -459,3 +459,14 @@ def test_npm_rejects_invalid_metadata(
             directory=package_dir,
             dry_run=True,
         )
+
+
+def test_read_package_json_reports_invalid_utf8(tmp_path: Path) -> None:
+    package_dir = tmp_path / "package"
+    package_dir.mkdir()
+    (package_dir / "package.json").write_bytes(b"\xff")
+
+    with pytest.raises(PackageError, match="Invalid UTF-8") as exc_info:
+        npm.read_package_json(package_dir)
+
+    assert isinstance(exc_info.value.__cause__, UnicodeDecodeError)

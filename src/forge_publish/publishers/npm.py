@@ -35,6 +35,8 @@ def read_package_json(directory: Path) -> dict[str, object]:
     try:
         with package_json.open(encoding="utf-8") as file:
             data = json.load(file)
+    except UnicodeDecodeError as exc:
+        raise PackageError(f"Invalid UTF-8 in {package_json}.") from exc
     except json.JSONDecodeError as exc:
         raise PackageError(f"Invalid JSON in {package_json}.") from exc
     except OSError as exc:

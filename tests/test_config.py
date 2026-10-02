@@ -282,6 +282,20 @@ def test_read_config_reports_invalid_toml(
         config_module._read_config_data()
 
 
+def test_read_config_reports_invalid_utf8(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config_file = tmp_path / "config.toml"
+    config_file.write_bytes(b"\xff")
+    monkeypatch.setattr(config_module, "CONFIG_FILE", config_file)
+
+    with pytest.raises(ConfigurationError, match="Invalid UTF-8") as exc_info:
+        config_module._read_config_data()
+
+    assert isinstance(exc_info.value.__cause__, UnicodeDecodeError)
+
+
 def test_read_config_reports_io_error(
     monkeypatch,
 ) -> None:
