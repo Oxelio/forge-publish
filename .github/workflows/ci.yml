@@ -19,6 +19,21 @@ jobs:
     if: ${{ github.event.pull_request.draft == false }}
     uses: ./.github/workflows/integration.yml
 
+  dependency_review:
+    name: Dependency review
+    if: ${{ github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          vulnerability-check: true
+          license-check: false
+          show-patched-versions: true
+
   quality:
     name: Quality suite
     if: ${{ github.event.pull_request.draft == false }}
@@ -152,6 +167,7 @@ jobs:
   gate:
     name: Quality checks
     needs:
+      - dependency_review
       - integration
       - quality
       - python
@@ -163,17 +179,20 @@ jobs:
     steps:
       - name: Require all validation jobs
         env:
+          DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency_review.result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
           QUALITY_RESULT: ${{ needs.quality.result }}
           PYTHON_RESULT: ${{ needs.python.result }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
         run: |
+          printf 'Dependency review: %s\n' "${DEPENDENCY_REVIEW_RESULT}"
           printf 'Forgejo integration: %s\n' "${INTEGRATION_RESULT}"
           printf 'Quality suite: %s\n' "${QUALITY_RESULT}"
           printf 'Python matrix: %s\n' "${PYTHON_RESULT}"
           printf 'Windows matrix: %s\n' "${WINDOWS_RESULT}"
 
-          if [ "${INTEGRATION_RESULT}" != "success" ] || \
+          if [ "${DEPENDENCY_REVIEW_RESULT}" != "success" ] || \
+             [ "${INTEGRATION_RESULT}" != "success" ] || \
              [ "${QUALITY_RESULT}" != "success" ] || \
              [ "${PYTHON_RESULT}" != "success" ] || \
              [ "${WINDOWS_RESULT}" != "success" ]; then
