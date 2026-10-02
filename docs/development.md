@@ -71,12 +71,15 @@ Pull requests run:
 - Ruff linting
 - Ruff formatting verification
 - unit tests with coverage
+- dependency review for pull request dependency changes, blocking newly introduced high/critical known vulnerabilities
 - wheel and sdist build verification
 - Python 3.11, 3.12, and 3.13 compatibility jobs on Linux
 - the full quality suite on Python 3.14
 - Windows compatibility on Python 3.11 and 3.14
 
-The repository ruleset continues to require the `Quality checks` status. CI now runs the main quality suite, Forgejo integration, Linux compatibility matrix, and Windows compatibility matrix in parallel. A final job named `Quality checks` depends on all four groups and fails unless every group succeeds.
+The repository ruleset continues to require the `Quality checks` status. CI runs Dependency Review, the main quality suite, Forgejo integration, the Linux compatibility matrix, and the Windows compatibility matrix in parallel. A final job named `Quality checks` depends on all five groups and fails unless every group succeeds.
+
+Dependency Review evaluates only dependency changes introduced by the pull request and fails for newly introduced known vulnerabilities with high or critical severity. It uses read-only repository contents permission and reports findings through the GitHub Actions check output. License enforcement is explicitly disabled until the project defines a dependency-license policy. Dependabot remains enabled for weekly GitHub Actions and Python dependency updates; it is complementary to this merge-time review rather than replaced by it.
 
 The Forgejo integration workflow starts a digest-pinned Forgejo 16.0.5 image with an ephemeral self-signed TLS certificate and validates real Generic, Debian, and NPM publication through the CLI. Node.js is pinned to 24.21.0. NPM publication is exercised twice against the same Forgejo instance: once with the npm version bundled with that pinned Node.js runtime and once after explicitly installing and verifying the minimum supported npm 10.5.2. The two publications use distinct package versions so both compatibility paths are validated without hard-coding an assumed bundled npm version. The workflow also verifies that Forgejo rejects invalid credentials.
 
