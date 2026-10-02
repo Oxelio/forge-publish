@@ -460,6 +460,7 @@ def test_npm_rejects_invalid_metadata(
             dry_run=True,
         )
 
+
 def test_read_package_json_reports_invalid_utf8(tmp_path: Path) -> None:
     package_dir = tmp_path / "package"
     package_dir.mkdir()
