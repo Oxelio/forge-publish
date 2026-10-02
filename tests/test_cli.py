@@ -273,6 +273,7 @@ def test_npm_uses_current_directory_by_default(
     assert result.exit_code == 0, result.output
     assert captured["directory"] == Path(".")
 
+
 def test_npm_invalid_utf8_is_reported_without_traceback(
     tmp_path: Path,
     monkeypatch,
