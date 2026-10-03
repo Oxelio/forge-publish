@@ -22,6 +22,10 @@ TLS certificate verification is enabled by default.
 
 The `--insecure` option for Debian and Generic packages disables certificate validation and therefore removes protection against man-in-the-middle attacks. Use it only in controlled environments.
 
+## Debian version marker
+
+The `debian-binary` member is limited to 16 bytes before its payload is read, including during dry-run. The usual `2.0\n` marker and small whitespace variations remain supported; oversized, invalid, or truncated markers produce a package error. This marker limit does not restrict the size of `data.tar*` members, which are skipped while locating the control archive.
+
 ## NPM credential isolation
 
 NPM publication requires npm 10.5.2 or newer and uses two phases:
