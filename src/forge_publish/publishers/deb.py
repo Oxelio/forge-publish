@@ -17,6 +17,8 @@ from ..errors import PackageError
 AR_MAGIC = b"!<arch>\n"
 AR_HEADER_SIZE = 60
 AR_HEADER_TRAILER = b"`\n"
+# The Debian 2.0 marker is normally b"2.0\n"; allow bounded whitespace.
+MAX_DEBIAN_BINARY_SIZE = 16
 MAX_CONTROL_ARCHIVE_COMPRESSED_SIZE = 8 * 1024 * 1024
 MAX_CONTROL_ARCHIVE_SIZE = 16 * 1024 * 1024
 MAX_CONTROL_FILE_SIZE = 1 * 1024 * 1024
@@ -144,6 +146,10 @@ def _read_control_archive(
                 )
 
                 if name == "debian-binary":
+                    if size > MAX_DEBIAN_BINARY_SIZE:
+                        raise PackageError(
+                            f"Debian debian-binary member is too large in {file.name}."
+                        )
                     content = _read_ar_member(
                         stream,
                         size,

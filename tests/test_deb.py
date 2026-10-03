@@ -4,10 +4,14 @@ import io
 import lzma
 import tarfile
 from pathlib import Path
+from unittest.mock import MagicMock, Mock
 
 import pytest
 import zstandard
+from click.testing import CliRunner
 
+from forge_publish import config as config_module
+from forge_publish.cli import main
 from forge_publish.config import Config
 from forge_publish.errors import PackageError
 from forge_publish.publishers import deb as deb_module
@@ -174,6 +178,159 @@ def test_rejects_invalid_debian_binary(tmp_path: Path) -> None:
 
     with pytest.raises(PackageError, match="debian-binary"):
         read_deb_metadata(package)
+
+
+@pytest.mark.parametrize("size", [17, 4096, 9999999999])
+def test_rejects_oversized_debian_binary_before_reading(size: int) -> None:
+    header = bytearray(_ar_member("debian-binary", b"")[:60])
+    header[48:58] = f"{size:<10}".encode("ascii")
+    read_sizes: list[int] = []
+
+    class ReadSpy(io.BytesIO):
+        def read(self, size: int = -1) -> bytes:
+            read_sizes.append(size)
+            if size < 0 or size > 60:
+                raise AssertionError("unbounded marker read requested")
+            return super().read(size)
+
+    stream = ReadSpy(b"!<arch>\n" + bytes(header))
+    package = Mock(spec=Path)
+    package.name = "oversized.deb"
+    package.open.return_value = stream
+
+    with pytest.raises(PackageError, match="debian-binary member is too large"):
+        read_deb_metadata(package)
+
+    assert read_sizes == [8, 60]
+
+
+def test_rejects_oversized_whitespace_padded_debian_binary(tmp_path: Path) -> None:
+    package = tmp_path / "oversized.deb"
+    package.write_bytes(
+        b"!<arch>\n"
+        + _ar_member("debian-binary", b"2.0" + b" " * 4093)
+        + _ar_member("control.tar", _tar_control())
+    )
+
+    with pytest.raises(PackageError, match="debian-binary member is too large"):
+        publish(
+            client=FakeClient(),
+            file=package,
+            distribution="stable",
+            component="main",
+            dry_run=False,
+        )
+
+
+@pytest.mark.parametrize("marker", [b"2.0", b"2.0\n", b" 2.0\r\n", b"2.0" + b" " * 13])
+def test_read_deb_metadata_accepts_bounded_debian_binary(
+    tmp_path: Path,
+    marker: bytes,
+) -> None:
+    package = tmp_path / "servcli.deb"
+    package.write_bytes(
+        b"!<arch>\n"
+        + _ar_member("debian-binary", marker)
+        + _ar_member("control.tar", _tar_control())
+    )
+
+    assert read_deb_metadata(package) == {
+        "name": "servcli",
+        "version": "1.9.3-0",
+        "architecture": "i386",
+    }
+
+
+def test_large_data_member_is_skipped_without_reading() -> None:
+    size = 9999999999
+    data_header = bytearray(_ar_member("data.tar.gz", b"")[:60])
+    data_header[48:58] = f"{size:<10}".encode("ascii")
+    control = _tar_control()
+    # Model a large data member without allocating its payload or a sparse file.
+    stream = Mock()
+    stream.read.side_effect = [
+        b"!<arch>\n",
+        _ar_member("debian-binary", b"2.0\n")[:60],
+        b"2.0\n",
+        bytes(data_header),
+        b"\n",
+        _ar_member("control.tar", control)[:60],
+        control,
+    ]
+    package = Mock(spec=Path)
+    package.name = "large-data.deb"
+    package.open.return_value = MagicMock()
+    package.open.return_value.__enter__.return_value = stream
+
+    assert deb_module._read_control_archive(package) == ("control.tar", control)
+    stream.seek.assert_called_once_with(size, 1)
+    assert [call.args[0] for call in stream.read.call_args_list] == [
+        8,
+        60,
+        4,
+        60,
+        1,
+        60,
+        len(control),
+    ]
+
+
+@pytest.mark.parametrize("marker", [b"2.0" + b" " * 4093, b"1.0\n", b"2."])
+def test_debian_binary_error_is_reported_by_cli_dry_run(
+    tmp_path: Path,
+    monkeypatch,
+    marker: bytes,
+) -> None:
+    package = tmp_path / "invalid.deb"
+    member = _ar_member("debian-binary", marker)
+    if marker == b"2.":
+        # Declare four bytes but supply only two to exercise truncation.
+        member = _ar_member("debian-binary", b"2.0\n")[:60] + marker
+    else:
+        member += _ar_member("control.tar", _tar_control())
+    package.write_bytes(b"!<arch>\n" + member)
+    monkeypatch.setattr(
+        config_module,
+        "_read_config_data",
+        lambda: {
+            "url": "https://forge.example.com",
+            "owner": "Software",
+            "username": "user",
+        },
+    )
+
+    def unexpected_call(*args, **kwargs):
+        raise AssertionError("dry-run must not access tokens or upload")
+
+    monkeypatch.setattr(config_module, "_get_keyring_token", unexpected_call)
+    monkeypatch.setattr(config_module, "_prompt_token", unexpected_call)
+    monkeypatch.setattr(deb_module.ForgejoClient, "upload", unexpected_call)
+    monkeypatch.setattr("requests.sessions.Session.request", unexpected_call)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "deb",
+            str(package),
+            "--distribution",
+            "stable",
+            "--component",
+            "main",
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert result.output.startswith("Error: ")
+    if len(marker) > 16:
+        assert "debian-binary member is too large" in result.output
+    elif marker == b"2.":
+        assert "truncated ar member" in result.output
+    else:
+        assert "valid debian-binary member" in result.output
+    assert "Traceback" not in result.output
+    assert "published" not in result.output.lower()
+    assert "Token" not in result.output
 
 
 def test_rejects_missing_control_archive(tmp_path: Path) -> None:
