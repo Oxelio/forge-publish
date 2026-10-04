@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.4 (2026-10-04)
+
+### Bug Fixes
+
+- **deb**: Handle malformed tar extension errors
+  ([`db658fa`](https://github.com/Oxelio/forge-publish/commit/db658fa674f41c63ee668a1a0ce39df6b81a6436))
+
+
 ## v1.0.3 (2026-10-04)
 
 ### Bug Fixes
