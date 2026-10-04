@@ -10,6 +10,7 @@ import pytest
 import zstandard
 from click.testing import CliRunner
 
+from forge_publish import cli
 from forge_publish import config as config_module
 from forge_publish.cli import main
 from forge_publish.config import Config
@@ -106,6 +107,36 @@ def _write_deb(path: Path, control_name: str, control_data: bytes) -> None:
         + _ar_member(control_name, control_data)
         + _ar_member("data.tar.gz", gzip.compress(b"payload"))
     )
+
+
+@pytest.mark.parametrize("status_code", [301, 302, 303, 307, 308])
+def test_debian_redirect_is_reported_without_success(
+    tmp_path: Path, monkeypatch, redirect_session, status_code: int
+) -> None:
+    package = tmp_path / "package.deb"
+    _write_deb(package, "control.tar", _tar_control())
+    config = Config(
+        url="https://forge.example.com",
+        owner="Software",
+        username="user",
+        token="secret",
+    )
+    monkeypatch.setattr(cli, "load_config", lambda *, require_token: config)
+    session, adapter = redirect_session(status_code)
+    monkeypatch.setattr("forge_publish.client.requests.Session", lambda: session)
+
+    result = CliRunner().invoke(
+        main,
+        ["deb", str(package), "--distribution", "stable", "--component", "main"],
+    )
+
+    assert result.exit_code == 1
+    assert f"Error: HTTP {status_code}:" in result.output
+    assert "canonical Forgejo URL" in result.output
+    assert "published successfully" not in result.output
+    assert "Traceback" not in result.output
+    assert len(adapter.requests) == 1
+    assert adapter.requests[0][0] == "PUT"
 
 
 @pytest.mark.parametrize(

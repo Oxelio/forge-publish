@@ -13,19 +13,21 @@ from forge_publish.config import Config
 
 
 class FailingSession:
-    def __init__(self) -> None:
+    def __init__(self, error=requests.ConnectionError) -> None:
         self.auth = None
+        self.error = error
 
-    def put(self, url, data, timeout, verify):
-        raise requests.ConnectionError("connection failed")
+    def put(self, url, data, timeout, verify, allow_redirects):
+        raise self.error("connection failed")
 
 
 class FailingDeleteSession:
-    def __init__(self) -> None:
+    def __init__(self, error=requests.ConnectionError) -> None:
         self.auth = None
+        self.error = error
 
-    def delete(self, url, timeout, verify):
-        raise requests.ConnectionError("connection failed")
+    def delete(self, url, timeout, verify, allow_redirects):
+        raise self.error("connection failed")
 
 
 _NO_JSON = object()
@@ -59,17 +61,20 @@ class Session:
         self.auth = None
         self.timeout = None
         self.verify = None
+        self.allow_redirects = None
         self.put_response = put_response or Response()
         self.delete_response = delete_response or Response()
 
-    def put(self, url, data, timeout, verify):
+    def put(self, url, data, timeout, verify, allow_redirects):
         self.timeout = timeout
         self.verify = verify
+        self.allow_redirects = allow_redirects
         return self.put_response
 
-    def delete(self, url, timeout, verify):
+    def delete(self, url, timeout, verify, allow_redirects):
         self.timeout = timeout
         self.verify = verify
+        self.allow_redirects = allow_redirects
         return self.delete_response
 
 
@@ -138,13 +143,17 @@ def test_upload_uses_timeout(tmp_path: Path) -> None:
 
     assert session.timeout == REQUEST_TIMEOUT
     assert session.verify is True
+    assert session.allow_redirects is False
 
 
-def test_upload_reports_network_error(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "error", [requests.ConnectionError, requests.Timeout, requests.exceptions.SSLError]
+)
+def test_upload_reports_network_error(tmp_path: Path, error) -> None:
     package = tmp_path / "package.bin"
     package.write_bytes(b"data")
     client = _client()
-    client.session = FailingSession()
+    client.session = FailingSession(error)
 
     with pytest.raises(
         ForgejoError,
@@ -193,6 +202,8 @@ def test_delete_disables_tls_verification() -> None:
     )
 
     assert session.verify is False
+    assert session.timeout == REQUEST_TIMEOUT
+    assert session.allow_redirects is False
 
 
 def test_delete_ignores_404_when_requested() -> None:
@@ -206,9 +217,12 @@ def test_delete_ignores_404_when_requested() -> None:
     )
 
 
-def test_delete_reports_network_error() -> None:
+@pytest.mark.parametrize(
+    "error", [requests.ConnectionError, requests.Timeout, requests.exceptions.SSLError]
+)
+def test_delete_reports_network_error(error) -> None:
     client = _client()
-    client.session = FailingDeleteSession()
+    client.session = FailingDeleteSession(error)
 
     with pytest.raises(ForgejoError, match="HTTP request failed: connection failed"):
         client.delete(
@@ -216,6 +230,75 @@ def test_delete_reports_network_error() -> None:
             dry_run=False,
             ignore_404=False,
         )
+
+
+@pytest.mark.parametrize("status_code", [301, 302, 303, 307, 308])
+@pytest.mark.parametrize("operation", ["upload", "delete"])
+@pytest.mark.parametrize("location", ["/login", "https://login.example.com/login"])
+def test_redirects_do_not_send_a_second_request(
+    tmp_path: Path,
+    redirect_session,
+    status_code: int,
+    operation: str,
+    location: str,
+) -> None:
+    package = tmp_path / "package.bin"
+    package.write_bytes(b"private package data")
+    client = _client()
+    client.session, adapter = redirect_session(status_code, location)
+    url = "https://forge.example.com/upload"
+
+    with pytest.raises(ForgejoError, match=f"HTTP {status_code}:.*redirect"):
+        if operation == "upload":
+            client.upload(url, package, dry_run=False)
+        else:
+            client.delete(url, dry_run=False, ignore_404=True)
+
+    expected = (
+        ("PUT", url, b"private package data")
+        if operation == "upload"
+        else ("DELETE", url, None)
+    )
+    assert adapter.requests == [expected]
+
+
+@pytest.mark.parametrize("status_code", [200, 201, 202, 204])
+@pytest.mark.parametrize("operation", ["upload", "delete"])
+def test_direct_success_is_preserved(
+    tmp_path: Path,
+    redirect_session,
+    status_code: int,
+    operation: str,
+) -> None:
+    package = tmp_path / "package.bin"
+    package.write_bytes(b"data")
+    client = _client()
+    client.session, adapter = redirect_session(status_code)
+    url = "https://forge.example.com/upload"
+
+    if operation == "upload":
+        client.upload(url, package, dry_run=False)
+    else:
+        client.delete(url, dry_run=False, ignore_404=False)
+
+    assert len(adapter.requests) == 1
+
+
+def test_dry_run_makes_no_http_requests(tmp_path: Path, redirect_session) -> None:
+    client = _client(token=None)
+    client.session, adapter = redirect_session(302)
+    url = "https://forge.example.com/upload"
+
+    client.upload(url, tmp_path / "missing.bin", dry_run=True)
+    client.delete(url, dry_run=True, ignore_404=False)
+
+    assert adapter.requests == []
+
+
+@pytest.mark.parametrize("status_code", [300, 304, 399])
+def test_other_3xx_responses_give_canonical_url_guidance(status_code: int) -> None:
+    with pytest.raises(ForgejoError, match="canonical Forgejo URL.*proxy"):
+        ForgejoClient._raise_error(Response(status_code, text="login page"))
 
 
 @pytest.mark.parametrize(

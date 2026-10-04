@@ -1,11 +1,42 @@
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from forge_publish import cli
 from forge_publish import config as config_module
 from forge_publish.cli import main
 from forge_publish.config import Config
+
+
+@pytest.mark.parametrize("status_code", [301, 302, 303, 307, 308])
+def test_generic_redirect_is_reported_without_success(
+    tmp_path: Path, monkeypatch, redirect_session, status_code: int
+) -> None:
+    package = tmp_path / "package.bin"
+    package.write_bytes(b"private package data")
+    config = Config(
+        url="https://forge.example.com",
+        owner="Software",
+        username="user",
+        token="secret",
+    )
+    monkeypatch.setattr(cli, "load_config", lambda *, require_token: config)
+    session, adapter = redirect_session(status_code)
+    monkeypatch.setattr("forge_publish.client.requests.Session", lambda: session)
+
+    result = CliRunner().invoke(
+        main,
+        ["generic", str(package), "--package", "example", "--version", "1.0.0"],
+    )
+
+    assert result.exit_code == 1
+    assert f"Error: HTTP {status_code}:" in result.output
+    assert "canonical Forgejo URL" in result.output
+    assert "published successfully" not in result.output
+    assert "Traceback" not in result.output
+    assert len(adapter.requests) == 1
+    assert adapter.requests[0][0] == "PUT"
 
 
 def test_create_client_does_not_warn_when_insecure_dry_run(
