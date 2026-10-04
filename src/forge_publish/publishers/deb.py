@@ -22,6 +22,10 @@ MAX_DEBIAN_BINARY_SIZE = 16
 MAX_CONTROL_ARCHIVE_COMPRESSED_SIZE = 8 * 1024 * 1024
 MAX_CONTROL_ARCHIVE_SIZE = 16 * 1024 * 1024
 MAX_CONTROL_FILE_SIZE = 1 * 1024 * 1024
+# Accommodate normal XZ/LZMA dictionaries, including preset 9's 64 MiB,
+# while bounding decoder allocations separately from the output limit.
+MAX_LZMA_MEMORY = 128 * 1024 * 1024
+MAX_ZSTD_WINDOW_SIZE = 64 * 1024 * 1024
 
 
 def _is_control_archive(name: str) -> bool:
@@ -203,6 +207,39 @@ def _read_limited(
     return data
 
 
+def _decompress_lzma(data: bytes, filename: str) -> bytes:
+    chunks: list[bytes] = []
+    size = 0
+
+    if not data:
+        raise EOFError("Empty LZMA stream")
+
+    while data:
+        is_xz = data.startswith(b"\xfd7zXZ\x00")
+        decoder = lzma.LZMADecompressor(memlimit=MAX_LZMA_MEMORY)
+        chunk = decoder.decompress(data, max_length=MAX_CONTROL_ARCHIVE_SIZE + 1 - size)
+        size += len(chunk)
+        if size > MAX_CONTROL_ARCHIVE_SIZE:
+            raise PackageError(
+                f"Decompressed Debian control archive is too large: {filename}"
+            )
+        if not decoder.eof:
+            raise EOFError("Truncated LZMA stream")
+        data = decoder.unused_data
+        # Release each decoder before allocating the next stream's dictionary.
+        del decoder
+        chunks.append(chunk)
+
+        if is_xz:
+            # XZ allows padding between/after streams in multiples of four bytes.
+            padding = len(data) - len(data.lstrip(b"\x00"))
+            if padding % 4:
+                raise lzma.LZMAError("Invalid XZ stream padding")
+            data = data[padding:]
+
+    return b"".join(chunks)
+
+
 def _decompress_control(data: bytes, filename: str) -> bytes:
     try:
         if filename == "control.tar":
@@ -222,12 +259,7 @@ def _decompress_control(data: bytes, filename: str) -> bytes:
                 )
 
         if filename.endswith((".xz", ".lzma")):
-            with lzma.LZMAFile(source, mode="rb") as stream:
-                return _read_limited(
-                    stream,
-                    MAX_CONTROL_ARCHIVE_SIZE,
-                    filename,
-                )
+            return _decompress_lzma(data, filename)
 
         if filename.endswith(".bz2"):
             with bz2.BZ2File(source, mode="rb") as stream:
@@ -238,7 +270,9 @@ def _decompress_control(data: bytes, filename: str) -> bytes:
                 )
 
         if filename.endswith(".zst"):
-            with zstandard.ZstdDecompressor().stream_reader(source) as stream:
+            # The supported native backends pass this value to libzstd in bytes.
+            decoder = zstandard.ZstdDecompressor(max_window_size=MAX_ZSTD_WINDOW_SIZE)
+            with decoder.stream_reader(source) as stream:
                 return _read_limited(
                     stream,
                     MAX_CONTROL_ARCHIVE_SIZE,

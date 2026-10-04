@@ -26,6 +26,14 @@ The `--insecure` option for Debian and Generic packages disables certificate val
 
 The `debian-binary` member is limited to 16 bytes before its payload is read, including during dry-run. The usual `2.0\n` marker and small whitespace variations remain supported; oversized, invalid, or truncated markers produce a package error. This marker limit does not restrict the size of `data.tar*` members, which are skipped while locating the control archive.
 
+## Debian control archive resources
+
+Control archives are limited to 8 MiB of compressed input, 16 MiB of decompressed tar data, and 1 MiB for the control file. XZ and LZMA-alone decoding also has a 128 MiB decoder memory limit. This leaves room for normal dictionaries, including the 64 MiB dictionary used by LZMA preset 9, while rejecting oversized decoder requirements before allocating the dictionary.
+
+Zstandard decoding limits the frame window to 64 MiB. This is a window bound, not a total process memory limit; decoder buffers and the bounded input/output require additional memory. The limit exceeds the allowed control archive output to accommodate normal compressor settings. The supported python-zstandard native backends pass `max_window_size` to libzstd in bytes, despite the API documentation describing KiB. Regression tests exercise real frame windows at and above a small bound to check the effective units.
+
+These checks apply during publication and dry-run. Decoder failures produce a contextual package error and prevent upload. Concatenated XZ/LZMA streams share the same output limit and each decoder receives the memory limit. Valid XZ padding is accepted; truncated streams, invalid padding, and non-stream trailing bytes are rejected. Packages requiring larger dictionaries or windows must have their control archive recompressed with smaller settings.
+
 ## NPM credential isolation
 
 NPM publication requires npm 10.5.2 or newer and uses two phases:
