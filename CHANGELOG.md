@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.6 (2026-10-04)
+
+### Bug Fixes
+
+- **deb**: Guard parser errors with bounded fuzz coverage
+  ([`3a8ff82`](https://github.com/Oxelio/forge-publish/commit/3a8ff8277e5b7c5a289f62f669276cbb9a350352))
+
+
 ## v1.0.5 (2026-10-04)
 
 ### Bug Fixes
