@@ -29,6 +29,39 @@ Generate an HTML report with:
 pytest --cov-report=html
 ```
 
+### Debian parser fuzz corpus
+
+`tests/test_deb_fuzz.py` runs in the normal pytest suite on every supported CI
+platform. It uses Python's standard-library `random.Random(47)` and explicit
+iteration/input limits rather than adding Hypothesis or a scheduled heavyweight
+fuzzer. This keeps the initial strategy reproducible and dependency-free while
+covering arbitrary bytes, ar headers, truncations, mutated tar archives and
+generated control fields across all six supported compression formats. Valid
+inputs must return the expected metadata; arbitrary/mutated inputs may return
+metadata or raise `PackageError`, but must not leak unexpected exceptions.
+
+Run the corpus locally with:
+
+```bash
+pytest tests/test_deb_fuzz.py --no-cov
+```
+
+Inputs are at most 32 KiB and exist only in memory. Tests lower parser resource
+limits, check bounded ar reads and rejection before oversized payload reads,
+exercise exact decompressed/control-file boundaries, and retain decoder-memory
+and malformed GNU/PAX extension seeds from the existing regression suite.
+Huge declared sizes are header-only fixtures, never huge allocated payloads.
+Filesystem extraction APIs are forbidden. There are no timing assertions;
+bounded inputs/iterations and the existing CI job timeouts limit test execution
+without introducing timing-dependent failures. This corpus is a regression
+guard, not an exhaustive proof of parser safety or a sandbox for native crashes.
+
+Failures report the seed and case (format, corpus index, mutation/truncation
+index) in the exception notes. Re-run the same test to reproduce. If a mutation
+discovers a defect, minimize it into a named fixture and explicit regression
+test in `tests/test_deb.py`, then add that fixture to the fuzz seeds. Keep seeds
+and iteration budgets explicit and reviewable when extending the corpus.
+
 ## Linting and formatting
 
 ```bash

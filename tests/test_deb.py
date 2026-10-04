@@ -717,6 +717,59 @@ def test_rejects_invalid_compressed_control_archive(tmp_path: Path) -> None:
         read_deb_metadata(package)
 
 
+def _invalid_deflate_archive() -> bytes:
+    # Valid gzip header followed by the reserved DEFLATE block type (BTYPE=3).
+    # The decoder fails before checking the absent footer, on every Python.
+    return bytes.fromhex("1f8b0800000000000003") + b"\x07"
+
+
+def test_invalid_deflate_is_reported_as_package_error(tmp_path: Path) -> None:
+    package = tmp_path / "invalid-deflate.deb"
+    _write_deb(package, "control.tar.gz", _invalid_deflate_archive())
+    with pytest.raises(PackageError, match="Unable to decompress") as exc_info:
+        read_deb_metadata(package)
+    assert isinstance(exc_info.value.__cause__, zlib.error)
+
+
+def test_invalid_deflate_cli_dry_run(tmp_path: Path, monkeypatch) -> None:
+    package = tmp_path / "invalid-deflate.deb"
+    _write_deb(package, "control.tar.gz", _invalid_deflate_archive())
+    monkeypatch.setattr(
+        config_module,
+        "_read_config_data",
+        lambda: {
+            "url": "https://forge.example.com",
+            "owner": "Software",
+            "username": "user",
+        },
+    )
+
+    def unexpected_call(*args, **kwargs):
+        raise AssertionError("invalid package must not access tokens or upload")
+
+    monkeypatch.setattr(config_module, "_get_keyring_token", unexpected_call)
+    monkeypatch.setattr(config_module, "_prompt_token", unexpected_call)
+    monkeypatch.setattr(deb_module.ForgejoClient, "upload", unexpected_call)
+    monkeypatch.setattr("requests.sessions.Session.request", unexpected_call)
+    result = CliRunner().invoke(
+        main,
+        [
+            "deb",
+            str(package),
+            "--distribution",
+            "stable",
+            "--component",
+            "main",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 1
+    assert result.output == (
+        "Error: Unable to decompress Debian control archive: control.tar.gz\n"
+    )
+    assert isinstance(result.exception, SystemExit)
+
+
 def _malformed_tar_extension(kind: str) -> bytes:
     info = tarfile.TarInfo("extension")
     if kind.startswith("sparse"):

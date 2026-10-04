@@ -5,6 +5,7 @@ import gzip
 import io
 import lzma
 import tarfile
+import zlib
 from pathlib import Path
 from typing import BinaryIO
 from urllib.parse import quote
@@ -285,6 +286,7 @@ def _decompress_control(data: bytes, filename: str) -> bytes:
         OSError,
         EOFError,
         lzma.LZMAError,
+        zlib.error,
         zstandard.ZstdError,
     ) as exc:
         raise PackageError(
