@@ -2,6 +2,32 @@
 
 <!-- version list -->
 
+## v1.0.2 (2026-10-04)
+
+### Bug Fixes
+
+- **deb**: Bound debian-binary member reads
+  ([`0621f04`](https://github.com/Oxelio/forge-publish/commit/0621f04aec7a2fdc7dec849d23ddc20986ca6c7f))
+
+### Chores
+
+- Ignore XML coverage report
+  ([`fd31172`](https://github.com/Oxelio/forge-publish/commit/fd31172fcc2bd4799845dc984d58f2356ce4a15d))
+
+### Continuous Integration
+
+- Add dependency review gate
+  ([`b9b546a`](https://github.com/Oxelio/forge-publish/commit/b9b546a702b32a58e22f1117c7de90783d0e0fd8))
+
+- Export XML coverage report
+  ([`78a943f`](https://github.com/Oxelio/forge-publish/commit/78a943f9e5e5d23b1d44b2f6a7905562845db6cb))
+
+### Documentation
+
+- Document dependency review gate
+  ([`2fa3049`](https://github.com/Oxelio/forge-publish/commit/2fa30497a0582baebdef25008689b4bf0fb5802b))
+
+
 ## v1.0.1 (2026-10-02)
 
 ### Bug Fixes
