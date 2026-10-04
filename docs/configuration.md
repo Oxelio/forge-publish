@@ -59,3 +59,11 @@ The Forgejo URL must:
 - not contain a query string or fragment
 - not contain whitespace
 - use a valid port when a port is specified
+
+Use the canonical HTTPS URL of your Forgejo instance, including its base path if
+it is hosted under a subpath. Generic and Debian uploads and package deletions
+reject HTTP redirects rather than following them. A redirect to a login page or
+another host cannot count as a successful publication or receive a redirected
+package upload. If you receive an HTTP 3xx error, check the configured URL and
+ensure that your reverse proxy accepts token authentication for the package API
+without redirecting to an interactive login page.

@@ -62,6 +62,7 @@ class ForgejoClient:
                     data=stream,
                     timeout=REQUEST_TIMEOUT,
                     verify=self.verify_tls,
+                    allow_redirects=False,
                 )
         except requests.RequestException as exc:
             raise ForgejoError(f"HTTP request failed: {exc}") from exc
@@ -94,6 +95,7 @@ class ForgejoClient:
                 url,
                 timeout=REQUEST_TIMEOUT,
                 verify=self.verify_tls,
+                allow_redirects=False,
             )
         except requests.RequestException as exc:
             raise ForgejoError(f"HTTP request failed: {exc}") from exc
@@ -134,6 +136,12 @@ class ForgejoClient:
 
     @classmethod
     def _raise_error(cls, response: requests.Response) -> None:
+        if 300 <= response.status_code < 400:
+            raise ForgejoError(
+                f"HTTP {response.status_code}: Forgejo redirect refused. "
+                "Configure the canonical Forgejo URL and check proxy authentication."
+            )
+
         reasons = {
             400: "invalid package or request",
             401: "authentication failed",
