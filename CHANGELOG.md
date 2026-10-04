@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v1.0.3 (2026-10-04)
+
+### Bug Fixes
+
+- **client**: Reject package API redirects
+  ([`08de9db`](https://github.com/Oxelio/forge-publish/commit/08de9db5cbeef57f445ef9259727d9643552ba63))
+
+- **deb**: Bound control archive decoder memory
+  ([`9722a32`](https://github.com/Oxelio/forge-publish/commit/9722a32edb2afe660d8e3d9a0d766d3e126b833d))
+
+
 ## v1.0.2 (2026-10-04)
 
 ### Bug Fixes
