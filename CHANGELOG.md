@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.0.5 (2026-10-04)
+
+### Bug Fixes
+
+- **config**: Handle URL parser errors
+  ([`83a08b5`](https://github.com/Oxelio/forge-publish/commit/83a08b52dbeaa97a3f3897c3b7772374044a8401))
+
+
 ## v1.0.4 (2026-10-04)
 
 ### Bug Fixes
