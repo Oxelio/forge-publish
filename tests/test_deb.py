@@ -3,6 +3,7 @@ import gzip
 import io
 import lzma
 import tarfile
+import zlib
 from pathlib import Path
 from unittest.mock import MagicMock, Mock
 
@@ -171,6 +172,211 @@ def test_read_deb_metadata(
         "version": "1.9.3-0",
         "architecture": "i386",
     }
+
+
+@pytest.mark.parametrize("format", [lzma.FORMAT_XZ, lzma.FORMAT_ALONE])
+def test_lzma_decoder_memory_boundary(monkeypatch, format: int) -> None:
+    # Exercise the real decoder near a small test bound, not a large allocation.
+    monkeypatch.setattr(deb_module, "MAX_LZMA_MEMORY", 1024 * 1024)
+    filter_id = lzma.FILTER_LZMA2 if format == lzma.FORMAT_XZ else lzma.FILTER_LZMA1
+    control = _tar_control()
+    filename = "control.tar.xz" if format == lzma.FORMAT_XZ else "control.tar.lzma"
+    accepted = lzma.compress(
+        control, format=format, filters=[{"id": filter_id, "dict_size": 512 * 1024}]
+    )
+    rejected = lzma.compress(
+        control, format=format, filters=[{"id": filter_id, "dict_size": 1024 * 1024}]
+    )
+
+    assert deb_module._decompress_control(accepted, filename) == control
+    with pytest.raises(PackageError, match="Unable to decompress") as exc_info:
+        deb_module._decompress_control(rejected, filename)
+    assert isinstance(exc_info.value.__cause__, lzma.LZMAError)
+
+
+def _oversized_decoder_archive(filename: str) -> bytes:
+    # Mutate only decoder parameters in a tiny valid frame. No large compressor
+    # dictionary, source payload or memory-exhaustion workload is constructed.
+    control = _tar_control()
+    if filename == "control.tar.zst":
+        data = bytearray(
+            zstandard.ZstdCompressor(write_content_size=False).compress(control)
+        )
+        data[5] = 136  # Non-single-segment frame: 128 MiB window.
+        assert zstandard.get_frame_parameters(data).window_size == 128 * 1024 * 1024
+    elif filename == "control.tar.xz":
+        data = bytearray(lzma.compress(control))
+        data[16] = 32  # LZMA2 filter property: 256 MiB dictionary.
+        data[20:24] = zlib.crc32(data[12:20]).to_bytes(4, "little")
+    else:
+        data = bytearray(lzma.compress(control, format=lzma.FORMAT_ALONE))
+        data[1:5] = (256 * 1024 * 1024).to_bytes(4, "little")
+    return bytes(data)
+
+
+@pytest.mark.parametrize(
+    "filename", ["control.tar.xz", "control.tar.lzma", "control.tar.zst"]
+)
+def test_rejects_hostile_decoder_parameters_before_upload(
+    tmp_path: Path, filename: str
+) -> None:
+    package = tmp_path / "hostile.deb"
+    _write_deb(package, filename, _oversized_decoder_archive(filename))
+
+    with pytest.raises(PackageError, match="Unable to decompress") as exc_info:
+        publish(
+            client=FakeClient(),
+            file=package,
+            distribution="stable",
+            component="main",
+            dry_run=False,
+        )
+    assert isinstance(exc_info.value.__cause__, (lzma.LZMAError, zstandard.ZstdError))
+
+
+def test_zstd_window_boundary_uses_bytes(monkeypatch) -> None:
+    monkeypatch.setattr(deb_module, "MAX_ZSTD_WINDOW_SIZE", 16 * 1024)
+    control = _tar_control()
+    frame = bytearray(
+        zstandard.ZstdCompressor(write_content_size=False).compress(control)
+    )
+    frame[5] = 32  # 16 KiB window, exactly the configured bound.
+    assert zstandard.get_frame_parameters(frame).window_size == 16 * 1024
+    assert deb_module._decompress_control(bytes(frame), "control.tar.zst") == control
+
+    frame[5] = 33  # 18 KiB window: immediately above the bound.
+    assert zstandard.get_frame_parameters(frame).window_size == 18 * 1024
+    with pytest.raises(PackageError, match="Unable to decompress") as exc_info:
+        deb_module._decompress_control(bytes(frame), "control.tar.zst")
+    assert isinstance(exc_info.value.__cause__, zstandard.ZstdError)
+
+
+@pytest.mark.parametrize(
+    ("format", "padding"),
+    [
+        (lzma.FORMAT_XZ, b""),
+        (lzma.FORMAT_XZ, b"\x00" * 4),
+        (lzma.FORMAT_XZ, b"\x00" * 8),
+        (lzma.FORMAT_ALONE, b""),
+    ],
+)
+def test_lzma_concatenated_streams_keep_output_bound(
+    monkeypatch, format: int, padding: bytes
+) -> None:
+    control = _tar_control()
+    split = len(control) // 2
+    data = (
+        lzma.compress(control[:split], format=format)
+        + padding
+        + lzma.compress(control[split:], format=format)
+        + padding
+    )
+    filename = "control.tar.xz" if format == lzma.FORMAT_XZ else "control.tar.lzma"
+    monkeypatch.setattr(deb_module, "MAX_CONTROL_ARCHIVE_SIZE", len(control))
+    assert deb_module._decompress_control(data, filename) == control
+
+    monkeypatch.setattr(deb_module, "MAX_CONTROL_ARCHIVE_SIZE", len(control) - 1)
+    with pytest.raises(PackageError, match="too large"):
+        deb_module._decompress_control(data, filename)
+
+
+@pytest.mark.parametrize(
+    "filename", ["control.tar.xz", "control.tar.lzma", "control.tar.zst"]
+)
+def test_decoder_error_is_reported_by_cli_dry_run(
+    tmp_path: Path, monkeypatch, filename: str
+) -> None:
+    package = tmp_path / "hostile.deb"
+    _write_deb(package, filename, _oversized_decoder_archive(filename))
+    monkeypatch.setattr(
+        config_module,
+        "_read_config_data",
+        lambda: {
+            "url": "https://forge.example.com",
+            "owner": "Software",
+            "username": "user",
+        },
+    )
+
+    def unexpected_call(*args, **kwargs):
+        raise AssertionError("dry-run must not access tokens or upload")
+
+    monkeypatch.setattr(config_module, "_get_keyring_token", unexpected_call)
+    monkeypatch.setattr(config_module, "_prompt_token", unexpected_call)
+    monkeypatch.setattr(deb_module.ForgejoClient, "upload", unexpected_call)
+    monkeypatch.setattr("requests.sessions.Session.request", unexpected_call)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "deb",
+            str(package),
+            "--distribution",
+            "stable",
+            "--component",
+            "main",
+            "--dry-run",
+        ],
+    )
+    assert result.exit_code == 1
+    assert (
+        result.output
+        == f"Error: Unable to decompress Debian control archive: {filename}\n"
+    )
+
+
+@pytest.mark.parametrize("format", [lzma.FORMAT_XZ, lzma.FORMAT_ALONE])
+@pytest.mark.parametrize("suffix", [b"", b"\x00", b"garbage"])
+def test_lzma_truncation_and_invalid_trailing_data(format: int, suffix: bytes) -> None:
+    data = lzma.compress(_tar_control(), format=format)
+    filename = "control.tar.xz" if format == lzma.FORMAT_XZ else "control.tar.lzma"
+    data = data[:-1] if not suffix else data + suffix
+    with pytest.raises(PackageError, match="Unable to decompress"):
+        deb_module._decompress_control(data, filename)
+
+
+@pytest.mark.parametrize("filename", ["control.tar.xz", "control.tar.lzma"])
+def test_lzma_rejects_empty_compressed_stream(filename: str) -> None:
+    with pytest.raises(PackageError, match="Unable to decompress") as exc_info:
+        deb_module._decompress_control(b"", filename)
+    assert isinstance(exc_info.value.__cause__, EOFError)
+
+
+@pytest.mark.parametrize("format", [lzma.FORMAT_XZ, lzma.FORMAT_ALONE])
+def test_lzma_memory_limit_applies_to_later_streams(monkeypatch, format: int) -> None:
+    monkeypatch.setattr(deb_module, "MAX_LZMA_MEMORY", 1024 * 1024)
+    filter_id = lzma.FILTER_LZMA2 if format == lzma.FORMAT_XZ else lzma.FILTER_LZMA1
+    first = lzma.compress(
+        b"first", format=format, filters=[{"id": filter_id, "dict_size": 512 * 1024}]
+    )
+    second = lzma.compress(
+        b"second", format=format, filters=[{"id": filter_id, "dict_size": 1024 * 1024}]
+    )
+    filename = "control.tar.xz" if format == lzma.FORMAT_XZ else "control.tar.lzma"
+    with pytest.raises(PackageError, match="Unable to decompress") as exc_info:
+        deb_module._decompress_control(first + second, filename)
+    assert isinstance(exc_info.value.__cause__, lzma.LZMAError)
+
+
+@pytest.mark.parametrize(
+    ("filename", "compress"),
+    [
+        ("control.tar.xz", lzma.compress),
+        (
+            "control.tar.lzma",
+            lambda data: lzma.compress(data, format=lzma.FORMAT_ALONE),
+        ),
+        ("control.tar.zst", lambda data: zstandard.ZstdCompressor().compress(data)),
+    ],
+)
+def test_decoder_output_limit_boundary(monkeypatch, filename: str, compress) -> None:
+    data = b"x" * 1024
+    compressed = compress(data)
+    monkeypatch.setattr(deb_module, "MAX_CONTROL_ARCHIVE_SIZE", len(data))
+    assert deb_module._decompress_control(compressed, filename) == data
+    monkeypatch.setattr(deb_module, "MAX_CONTROL_ARCHIVE_SIZE", len(data) - 1)
+    with pytest.raises(PackageError, match="too large"):
+        deb_module._decompress_control(compressed, filename)
 
 
 def test_rejects_invalid_debian_magic(tmp_path: Path) -> None:
