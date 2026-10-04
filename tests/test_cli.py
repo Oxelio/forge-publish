@@ -356,3 +356,61 @@ def test_config_invalid_utf8_is_reported_without_traceback(
     assert result.exit_code != 0
     assert "Error: Invalid UTF-8 configuration:" in result.output
     assert "Traceback" not in result.output
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://[::1",
+        "https://::1]",
+        "https://forge.example.com\uff0fpath",
+        "https://forge.example.com\uff1a443",
+    ],
+)
+@pytest.mark.parametrize("command", ["config", "generic", "generic-dry-run"])
+def test_url_parser_errors_are_reported_before_side_effects(
+    tmp_path: Path, monkeypatch, url: str, command: str
+) -> None:
+    config_dir = tmp_path / "configuration"
+    config_file = config_dir / "config.toml"
+    monkeypatch.setattr(config_module, "CONFIG_DIR", config_dir)
+    monkeypatch.setattr(config_module, "CONFIG_FILE", config_file)
+    monkeypatch.delenv("FORGE_PUBLISH_TOKEN", raising=False)
+
+    def fail(*args, **kwargs):
+        raise AssertionError("invalid URL must be rejected before side effects")
+
+    monkeypatch.setattr(config_module, "_prompt_token", fail)
+    monkeypatch.setattr(config_module.keyring, "get_password", fail)
+    monkeypatch.setattr(config_module.keyring, "set_password", fail)
+    monkeypatch.setattr(config_module.Config, "save", fail)
+    monkeypatch.setattr("forge_publish.client.requests.Session", fail)
+    monkeypatch.setattr(cli.generic, "publish", fail)
+
+    if command == "config":
+        args = ["config", "--url", url, "--owner", "Software", "--username", "user"]
+    else:
+        config_dir.mkdir()
+        config_file.write_text(
+            f'url = "{url}"\nowner = "Software"\nusername = "user"\n',
+            encoding="utf-8",
+        )
+        original_config = config_file.read_bytes()
+        package = tmp_path / "package.bin"
+        package.write_bytes(b"data")
+        args = ["generic", str(package), "--package", "example", "--version", "1.0.0"]
+        if command == "generic-dry-run":
+            args.append("--dry-run")
+
+    result = CliRunner().invoke(main, args)
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert result.output == (
+        "Error: Forgejo URL must be a valid HTTPS URL without "
+        "credentials, query parameters, or fragments.\n"
+    )
+    if command == "config":
+        assert not config_dir.exists()
+    else:
+        assert config_file.read_bytes() == original_config

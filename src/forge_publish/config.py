@@ -77,9 +77,8 @@ def _normalize_url(url: str) -> str:
             "credentials, query parameters, or fragments."
         )
 
-    parsed = urlsplit(normalized)
-
     try:
+        parsed = urlsplit(normalized)
         _port = parsed.port
     except ValueError as exc:
         raise ConfigurationError(

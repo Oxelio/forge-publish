@@ -260,6 +260,59 @@ def test_rejects_invalid_url(url: str) -> None:
         config_module._normalize_url(url)
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://[::1",
+        "https://::1]",
+        "https://forge.example.com\uff0fpath",
+        "https://forge.example.com\uff1a443",
+        "https://forge.example.com:abc",
+        "https://forge.example.com:99999",
+    ],
+)
+def test_url_parser_errors_preserve_cause(url: str) -> None:
+    with pytest.raises(ConfigurationError, match="valid HTTPS URL") as exc_info:
+        config_module._normalize_url(url)
+
+    assert isinstance(exc_info.value.__cause__, ValueError)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://[::1",
+        "https://::1]",
+        "https://forge.example.com\uff0fpath",
+        "https://forge.example.com\uff1a443",
+    ],
+)
+def test_build_config_rejects_url_parser_errors(url: str) -> None:
+    with pytest.raises(ConfigurationError, match="valid HTTPS URL") as exc_info:
+        config_module._build_config(
+            {"url": url, "owner": "Software", "username": "user"}
+        )
+
+    assert isinstance(exc_info.value.__cause__, ValueError)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://[::1]",
+        "https://[2001:db8::1]:8443/forgejo",
+        "https://forge.example.com",
+        "https://forge.example.com:443/forgejo",
+    ],
+)
+def test_valid_url_authorities_are_preserved(url: str) -> None:
+    assert config_module._normalize_url(f" {url}/ ") == url
+    config = config_module._build_config(
+        {"url": f" {url}/ ", "owner": "Software", "username": "user"}
+    )
+    assert config.url == url
+
+
 def test_read_config_reports_missing_file(
     tmp_path: Path,
     monkeypatch,
