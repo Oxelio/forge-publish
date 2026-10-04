@@ -389,7 +389,9 @@ def read_deb_metadata(file: Path) -> dict[str, str]:
 
             if len(control_data) > MAX_CONTROL_FILE_SIZE:
                 raise PackageError(f"Debian control file is too large in {file.name}.")
-    except tarfile.TarError as exc:
+    # Malformed GNU sparse blocks can raise IndexError; older tarfile
+    # versions can overflow while reading oversized PAX/GNU extensions.
+    except (tarfile.TarError, IndexError, OverflowError) as exc:
         raise PackageError(f"Invalid control archive in {file.name}.") from exc
 
     control = _parse_control(control_data)

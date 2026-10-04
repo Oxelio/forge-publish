@@ -717,6 +717,137 @@ def test_rejects_invalid_compressed_control_archive(tmp_path: Path) -> None:
         read_deb_metadata(package)
 
 
+def _malformed_tar_extension(kind: str) -> bytes:
+    info = tarfile.TarInfo("extension")
+    if kind.startswith("sparse"):
+        info.type = tarfile.GNUTYPE_SPARSE
+        header = bytearray(info.tobuf(format=tarfile.GNU_FORMAT))
+        header[482] = 1  # A following GNU sparse extension block is required.
+        header[148:156] = b"        "
+        header[148:156] = f"{sum(header):06o}\0 ".encode("ascii")
+        # Neither missing nor short blocks provide the flag at offset 504.
+        return bytes(header) + (b"\0" * 24 if kind == "sparse-short" else b"")
+
+    info.type = {
+        "pax": tarfile.XHDTYPE,
+        "gnu-longname": tarfile.GNUTYPE_LONGNAME,
+        "gnu-longlink": tarfile.GNUTYPE_LONGLINK,
+    }[kind]
+    info.size = 2**80
+    # Encode a declared huge size in the header only. Older tarfile versions
+    # overflow on the read size; newer bounded readers see immediate EOF.
+    return info.tobuf(format=tarfile.GNU_FORMAT)
+
+
+@pytest.mark.parametrize(
+    "kind", ["sparse-empty", "sparse-short", "pax", "gnu-longname", "gnu-longlink"]
+)
+@pytest.mark.parametrize("after_control", [False, True])
+def test_rejects_malformed_tar_extensions_before_upload(
+    tmp_path: Path, kind: str, after_control: bool
+) -> None:
+    package = tmp_path / "malformed.deb"
+    control_tar = _malformed_tar_extension(kind)
+    if after_control:
+        # A valid first member must not hide malformed metadata discovered
+        # while getmembers() traverses the remaining archive.
+        control_tar = _tar_control()[:1024] + control_tar
+    _write_deb(package, "control.tar", control_tar)
+
+    with pytest.raises(
+        PackageError, match=r"Invalid control archive in malformed\.deb\."
+    ) as exc_info:
+        publish(
+            client=FakeClient(),
+            file=package,
+            distribution="stable",
+            component="main",
+            dry_run=False,
+        )
+
+    # The precise parser error depends on the Python patch release.
+    expected = (
+        (IndexError, tarfile.TarError)
+        if kind.startswith("sparse")
+        else (
+            OverflowError,
+            tarfile.TarError,
+        )
+    )
+    assert isinstance(exc_info.value.__cause__, expected)
+
+
+@pytest.mark.parametrize(
+    "kind", ["sparse-empty", "sparse-short", "pax", "gnu-longname", "gnu-longlink"]
+)
+def test_tar_extension_error_is_reported_by_cli_dry_run(
+    tmp_path: Path, monkeypatch, kind: str
+) -> None:
+    package = tmp_path / "malformed.deb"
+    _write_deb(package, "control.tar", _malformed_tar_extension(kind))
+    monkeypatch.setattr(
+        config_module,
+        "_read_config_data",
+        lambda: {
+            "url": "https://forge.example.com",
+            "owner": "Software",
+            "username": "user",
+        },
+    )
+    token_lookup = Mock(side_effect=AssertionError("unexpected token lookup"))
+    token_prompt = Mock(side_effect=AssertionError("unexpected token prompt"))
+    upload = Mock(side_effect=AssertionError("unexpected upload"))
+    request = Mock(side_effect=AssertionError("unexpected HTTP request"))
+    monkeypatch.setattr(config_module, "_get_keyring_token", token_lookup)
+    monkeypatch.setattr(config_module, "_prompt_token", token_prompt)
+    monkeypatch.setattr(deb_module.ForgejoClient, "upload", upload)
+    monkeypatch.setattr("requests.sessions.Session.request", request)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "deb",
+            str(package),
+            "--distribution",
+            "stable",
+            "--component",
+            "main",
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert result.output == "Error: Invalid control archive in malformed.deb.\n"
+    assert isinstance(result.exception, SystemExit)
+    token_lookup.assert_not_called()
+    token_prompt.assert_not_called()
+    upload.assert_not_called()
+    request.assert_not_called()
+
+
+@pytest.mark.parametrize("format", [tarfile.PAX_FORMAT, tarfile.GNU_FORMAT])
+def test_read_deb_metadata_with_valid_tar_extensions(
+    tmp_path: Path, format: int
+) -> None:
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w", format=format) as archive:
+        # A long metadata member exercises PAX/GNU extension handling before
+        # the regular control file, without changing Debian metadata.
+        archive.addfile(tarfile.TarInfo("metadata/" + "x" * 128))
+        control = b"Package: servcli\nVersion: 1.9.3-0\nArchitecture: i386\n"
+        info = tarfile.TarInfo("control")
+        info.size = len(control)
+        archive.addfile(info, io.BytesIO(control))
+    package = tmp_path / "valid.deb"
+    _write_deb(package, "control.tar", output.getvalue())
+
+    assert read_deb_metadata(package) == {
+        "name": "servcli",
+        "version": "1.9.3-0",
+        "architecture": "i386",
+    }
+
+
 @pytest.mark.parametrize(
     "control",
     [
