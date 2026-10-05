@@ -27,16 +27,17 @@ The workflow:
 5. builds the wheel and source distribution
 6. creates the release commit and tag
 7. creates the GitHub Release
-8. generates `SHA256SUMS` for the built wheel and source distribution
-9. signs build provenance attestations for those digests using GitHub OIDC
-10. verifies the checksums again and uploads the distributions and manifest
+8. installs the built wheel with constrained runtime dependencies in a clean environment and generates/validates `forge-publish.cdx.json`
+9. generates `SHA256SUMS` for both distributions and the SBOM
+10. signs build provenance attestations for those digests using GitHub OIDC
+11. verifies the checksums again and uploads the distributions, SBOM and manifest
 
 The artifacts are built once by `semantic-release version`; `semantic-release
 publish` uploads those same files without rebuilding them. Only wheels, source
-distributions and `SHA256SUMS` are selected for upload. Checksum generation,
-attestation and upload run only when Semantic Release reports a new release;
-a no-release run skips all three. An attestation or checksum failure prevents
-artifact upload, although the release commit, tag and GitHub Release may already
+distributions, `forge-publish.cdx.json` and `SHA256SUMS` are selected for upload.
+SBOM/checksum generation, attestation and upload run only when Semantic Release
+reports a new release; a no-release run skips them. An SBOM, attestation or
+checksum failure prevents artifact upload, although the release commit, tag and GitHub Release may already
 exist. Review the failed run before attempting recovery; do not substitute
 rebuilt artifacts for the attested bytes.
 
@@ -74,13 +75,13 @@ it is not used for attestation signing. No long-lived signing key is added.
 
 ## Verify downloaded artifacts
 
-For releases produced by this workflow, download the wheel, source distribution
-and `SHA256SUMS` from the same GitHub Release into an empty directory. For example,
+For releases produced by this workflow, download the wheel, source distribution,
+the SBOM and `SHA256SUMS` from the same GitHub Release into an empty directory. For example,
 replace `vX.Y.Z` below with the intended release tag:
 
 ```bash
 gh release download vX.Y.Z --repo Oxelio/forge-publish \
-    --pattern '*.whl' --pattern '*.tar.gz' --pattern SHA256SUMS
+    --pattern '*.whl' --pattern '*.tar.gz' --pattern forge-publish.cdx.json --pattern SHA256SUMS
 sha256sum --check SHA256SUMS
 ```
 
@@ -94,7 +95,7 @@ which repository and workflow produced them. With an authenticated, current
 GitHub CLI that supports artifact attestations:
 
 ```bash
-for artifact in *.whl *.tar.gz; do
+for artifact in *.whl *.tar.gz forge-publish.cdx.json; do
     gh attestation verify "$artifact" --repo Oxelio/forge-publish \
         --signer-workflow Oxelio/forge-publish/.github/workflows/release.yml
 done
@@ -107,6 +108,80 @@ commit and tag. Attestations are available through GitHub's repository
 attestation service and the workflow summary, rather than as additional release
 assets. They prove origin and integrity, not that an artifact is free of defects.
 
+## Release SBOM
+
+Each new release includes one `forge-publish.cdx.json` document in
+[CycloneDX 1.6 JSON](https://cyclonedx.org/docs/1.6/json/). The pinned
+[CycloneDX Python CLI](https://cyclonedx-bom-tool.readthedocs.io/en/latest/usage.html)
+generates it from the actual built wheel installed with `requirements/tooling.txt`
+in a separate runtime environment. The release job uses Linux/Python 3.14 and
+installs no dev/release extras there. The generator itself runs in the tooling
+environment, not in the environment being inventoried.
+
+The root identity and runtime requirements come from the wheel's metadata after
+the version bump. Project, wheel, sdist and installed metadata must agree before
+generation. The document keeps the reachable runtime dependency graph, excluding
+unrelated bootstrap tools such as pip, and records exact resolved component
+versions, package URLs and available declared license metadata. Tool identities
+remain under `metadata.tools`, separate from application dependencies. References
+to both release distributions include their SHA-256 hashes. The document is
+schema-validated both before and after these additions; any validation failure
+stops publication. Repeated generation for the same artifacts, dependency
+environment and tooling produces the same bytes, without random IDs/timestamps.
+
+This is a **reference runtime profile**, not a list of vendored libraries or a
+universal dependency lock. Wheel/sdist dependencies retain compatible ranges;
+end users may resolve other versions. Windows, other Python versions, selected
+extras, native libraries, Python itself, Node/npm and Forgejo are not inventoried
+by this Linux base-runtime profile. The sdist reference identifies the matching
+project source, not every tool that an end user might use to build it. Inspect
+`metadata.properties` for the profile and resolution policy. Runtime requirement
+ranges remain authoritative in the distribution's `Requires-Dist` metadata.
+
+Download the document alongside the wheel/sdist and verify `SHA256SUMS` and its
+build provenance as above. Read the JSON with a CycloneDX-compatible consumer,
+or inspect `metadata.component`, `components` and `dependencies` directly.
+With the constrained release tooling installed, validate a downloaded document:
+
+```bash
+python - <<'PY'
+from pathlib import Path
+from cyclonedx.schema import SchemaVersion
+from cyclonedx.validation.json import JsonStrictValidator
+
+data = Path("forge-publish.cdx.json").read_text(encoding="utf-8")
+error = JsonStrictValidator(SchemaVersion.V1_6).validate_str(data)
+if error is not None:
+    raise SystemExit(str(error))
+print("Valid CycloneDX 1.6 document")
+PY
+```
+
+The existing OIDC provenance step also attests the SBOM's bytes, with no new
+permissions or signing credential. A separate CycloneDX **SBOM predicate
+attestation** is deliberately deferred: the single release document already
+identifies both distributions by hash, and publishing another attestation is
+unnecessary for this initial consumer contract. Provenance of the SBOM is not a
+claim that every consumer's eventual dependency resolution matches this profile.
+Older releases do not retroactively gain an SBOM.
+
+PR CI reuses its clean wheel smoke-test environment to exercise generation and
+checksums without rerunning tests or installing a second runtime profile. For
+local generation after `python -m build`, install the built wheel into a fresh
+virtual environment with the runtime constraints (no extras), run `pip check`,
+then invoke the script from the constrained development/release environment:
+
+```bash
+python .github/scripts/release-sbom.py --python /path/to/runtime-venv/bin/python
+bash .github/scripts/release-checksums.sh
+```
+
+On Windows pass the environment's `Scripts/python.exe` instead. Generator tests
+cover release-version mismatches, runtime requirements, graph completeness,
+schema failures, stable output, artifact hash references and private/local URL
+rejection. The release workflow must still confirm actual remote asset upload
+and OIDC provenance after the PR is merged.
+
 ## Local verification
 
 Preview the next release:
@@ -115,14 +190,14 @@ Preview the next release:
 semantic-release -v --noop version
 ```
 
-After a local distribution build, exercise checksum generation without signing
+After a local distribution build and SBOM generation, exercise checksums without signing
 or publishing anything:
 
 ```bash
 bash .github/scripts/release-checksums.sh
 ```
 
-The Linux release-script regression tests cover both distribution digests,
+The Linux release-script regression tests cover distribution/SBOM digests,
 repeatable output, missing distributions, upload selection and detection of
 modified bytes. PR CI does not publish releases or request release attestations;
 OIDC signing and remote attachment must also be verified on a release workflow

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Missing either distribution type must fail before attestation or publication.
+# Missing a distribution or its SBOM must fail before attestation/publication.
 cd "${1:-dist}"
-sha256sum -- *.whl *.tar.gz > SHA256SUMS
+sha256sum -- *.whl *.tar.gz forge-publish.cdx.json > SHA256SUMS
 sha256sum --check SHA256SUMS
