@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v2.0.0 (2026-10-05)
+
+### Bug Fixes
+
+- **npm**: Enforce safe pack scripts with npm 11
+  ([`c9971a2`](https://github.com/Oxelio/forge-publish/commit/c9971a2de98717a638cb0e7d5f3d7171919c3baa))
+
+### Chores
+
+- **npm**: Checkpoint issue 40 pending compatibility decision
+  ([`6dcffeb`](https://github.com/Oxelio/forge-publish/commit/6dcffeb17f2363694f2e85865f805472d8a61392))
+
+
 ## v1.0.6 (2026-10-04)
 
 ### Bug Fixes
