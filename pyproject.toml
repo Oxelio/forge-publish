@@ -29,6 +29,7 @@ dev = [
 ]
 release = [
     "build>=1.2",
+    "cyclonedx-bom==7.5.0",
     "python-semantic-release==10.7.0",
 ]
 
@@ -77,4 +78,4 @@ match = "main"
 prerelease = false
 
 [tool.semantic_release.publish]
-dist_glob_patterns = ["dist/*.whl", "dist/*.tar.gz", "dist/SHA256SUMS"]
+dist_glob_patterns = ["dist/*.whl", "dist/*.tar.gz", "dist/forge-publish.cdx.json", "dist/SHA256SUMS"]

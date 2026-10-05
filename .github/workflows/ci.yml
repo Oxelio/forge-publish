@@ -92,6 +92,12 @@ jobs:
           "${wheel_venv}/bin/forge-publish" --version
           "${wheel_venv}/bin/python" -m forge_publish --help
 
+      - name: Generate and validate release SBOM
+        run: |
+          python .github/scripts/release-sbom.py \
+            --python "${RUNNER_TEMP}/forge-publish-wheel/bin/python"
+          bash .github/scripts/release-checksums.sh
+
       - name: Verify built sdist in clean environment
         run: |
           sdist_venv="${RUNNER_TEMP}/forge-publish-sdist"

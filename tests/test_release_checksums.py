@@ -32,6 +32,7 @@ def test_release_checksums_cover_published_distributions(tmp_path: Path) -> None
     artifacts = {
         "forge_publish-2.0.1-py3-none-any.whl": b"wheel\x00\xff\n",
         "forge_publish-2.0.1.tar.gz": b"sdist\x00\xff\n",
+        "forge-publish.cdx.json": b'{"bomFormat":"CycloneDX"}\n',
     }
     for name, content in artifacts.items():
         (dist / name).write_bytes(content)
@@ -68,11 +69,19 @@ def test_release_checksums_cover_published_distributions(tmp_path: Path) -> None
     assert "FAILED" in verification.stdout
 
 
-@pytest.mark.parametrize("present", [None, "package.whl", "package.tar.gz"])
+@pytest.mark.parametrize(
+    "present", [None, "package.whl", "package.tar.gz", "forge-publish.cdx.json"]
+)
 def test_release_checksums_reject_missing_distributions(
     tmp_path: Path, present: str | None
 ) -> None:
     if present:
         (tmp_path / present).write_bytes(b"artifact")
 
+    assert generate_checksums(tmp_path).returncode != 0
+
+
+def test_release_checksums_require_sbom(tmp_path: Path) -> None:
+    (tmp_path / "package.whl").write_bytes(b"wheel")
+    (tmp_path / "package.tar.gz").write_bytes(b"source")
     assert generate_checksums(tmp_path).returncode != 0

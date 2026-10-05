@@ -111,11 +111,22 @@ jobs:
             semantic-release version
           fi
 
-      - name: Generate distribution checksums
+      - name: Generate and validate release SBOM
+        if: ${{ steps.release-mode.outputs.should_release == 'true' && steps.release.outputs.released == 'true' }}
+        run: |
+          runtime_venv="${RUNNER_TEMP}/forge-publish-sbom-runtime"
+          python -m venv "${runtime_venv}"
+          "${runtime_venv}/bin/python" -m pip install "pip==26.2.1"
+          "${runtime_venv}/bin/python" -m pip install \
+            --constraint requirements/tooling.txt dist/*.whl
+          "${runtime_venv}/bin/python" -m pip check
+          python .github/scripts/release-sbom.py --python "${runtime_venv}/bin/python"
+
+      - name: Generate release checksums
         if: ${{ steps.release-mode.outputs.should_release == 'true' && steps.release.outputs.released == 'true' }}
         run: bash .github/scripts/release-checksums.sh
 
-      - name: Attest distribution provenance
+      - name: Attest release provenance
         if: ${{ steps.release-mode.outputs.should_release == 'true' && steps.release.outputs.released == 'true' }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
