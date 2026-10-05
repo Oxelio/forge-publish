@@ -117,6 +117,24 @@ Dependency Review evaluates only dependency changes introduced by the pull reque
 
 The Forgejo integration workflow starts a digest-pinned Forgejo 16.0.5 image with an ephemeral self-signed TLS certificate and validates real Generic, Debian, and NPM publication through the CLI. Node.js is pinned to 24.21.0. NPM publication is exercised twice against the same Forgejo instance: once with the npm version bundled with that pinned Node.js runtime and once after explicitly installing and verifying the minimum supported npm 11.0.0. The two publications use distinct package versions so both compatibility paths are validated without hard-coding an assumed bundled npm version. The workflow also verifies that Forgejo rejects invalid credentials.
 
+The container publishes its HTTPS port only on the runner's IPv4 loopback
+(`127.0.0.1:3000:3000`). Its non-admin integration user receives only
+`write:package`, the [Forgejo package scope](https://forgejo.org/docs/v16.0/user/authentication/token-scope/)
+needed for Generic, Debian, and NPM publication; no repository, user, or admin
+scope is granted. A separate `read:package` token must fail to upload, checking
+the required write permission against the pinned server rather than assuming
+`all` is necessary.
+
+Readiness curl trusts the generated certificate with `--cacert`. Generic and
+Debian publication, plus invalid/read-only authentication checks, use
+`REQUESTS_CA_BUNDLE` and normal certificate verification. The workflow first
+requires a TLS verification failure without that trust, then separately
+publishes one Generic fixture using explicit `--insecure` to retain opt-in
+coverage. NPM keeps its independent `NODE_EXTRA_CA_CERTS` trust path. These
+checks reduce fixture exposure and privilege; running on a self-hosted runner
+still requires Docker, the workflow's Linux tools, an available loopback port,
+and isolation from unrelated jobs using the same Docker daemon.
+
 For NPM, both compatibility publications deliberately include conflicting project-local NPM authentication and TLS settings plus conflicting `publishConfig.registry` and `publishConfig.strict-ssl` values. Each publish must still use the temporary Forgejo credentials and verified TLS through Node's `NODE_EXTRA_CA_CERTS` mechanism.
 
 The shared `tests/fixtures/npm_lifecycle` fixture records harmless pack-hook events and rejects credential environment variables or authenticated publish hooks. Both npm compatibility publications verify that no pack hook runs by default, even with project `ignore-scripts=false`. A third publication uses explicit `--allow-pack-scripts` consent with the minimum npm version and project `ignore-scripts=true`, verifying all three pack hooks and preserving script-free authenticated publication. The local pytest lifecycle tests execute real npm pack when supported npm is available, intercept the upload, and inspect the archive with fake tokens; these tests skip when npm is absent or unsupported, while Forgejo CI always provisions supported npm. Unit tests verify that unsupported npm is rejected in both modes before packing or creating authentication files.
