@@ -58,7 +58,7 @@ jobs:
           docker run \
             --detach \
             --name forgejo \
-            --publish 3000:3000 \
+            --publish 127.0.0.1:3000:3000 \
             --volume "${RUNNER_TEMP}/forgejo:/data" \
             --env USER_UID=1000 \
             --env USER_GID=1000 \
@@ -76,7 +76,7 @@ jobs:
         run: |
           for attempt in {1..90}; do
             if curl \
-              --insecure \
+              --cacert "${RUNNER_TEMP}/forgejo/cert.pem" \
               --fail \
               --silent \
               --show-error \
@@ -108,7 +108,7 @@ jobs:
                 --username integration \
                 --token-name forge-publish-ci \
                 --raw \
-                --scopes all |
+                --scopes write:package |
               tr -d '\r\n'
           )"
 
@@ -127,14 +127,66 @@ jobs:
             --owner integration \
             --username integration
 
-      - name: Publish Generic package
+      - name: Reject untrusted TLS certificate
+        run: |
+          printf 'untrusted TLS integration\n' > "${RUNNER_TEMP}/untrusted-tls.bin"
+
+          if forge-publish generic "${RUNNER_TEMP}/untrusted-tls.bin" \
+            --package untrusted-tls \
+            --version 1.0.0 \
+            2> "${RUNNER_TEMP}/untrusted-tls.log"; then
+            echo "Expected the untrusted Forgejo certificate to be rejected." >&2
+            exit 1
+          fi
+          grep -q 'CERTIFICATE_VERIFY_FAILED' "${RUNNER_TEMP}/untrusted-tls.log"
+
+      - name: Publish Generic package with verified TLS
+        env:
+          REQUESTS_CA_BUNDLE: ${{ runner.temp }}/forgejo/cert.pem
         run: |
           printf 'forge-publish integration\n' > "${RUNNER_TEMP}/integration.bin"
 
           forge-publish generic "${RUNNER_TEMP}/integration.bin" \
             --package integration-generic \
+            --version 1.0.0
+
+      - name: Publish Generic package with explicit insecure opt-in
+        run: |
+          forge-publish generic "${RUNNER_TEMP}/untrusted-tls.bin" \
+            --package insecure-opt-in \
             --version 1.0.0 \
             --insecure
+
+      - name: Reject read-only package token
+        env:
+          REQUESTS_CA_BUNDLE: ${{ runner.temp }}/forgejo/cert.pem
+        run: |
+          token="$(
+            docker exec \
+              --user 1000 \
+              forgejo \
+              forgejo admin user generate-access-token \
+                --username integration \
+                --token-name forge-publish-read-only-ci \
+                --raw \
+                --scopes read:package |
+              tr -d '\r\n'
+          )"
+          if [ -z "${token}" ]; then
+            echo "Forgejo did not return a read-only access token." >&2
+            exit 1
+          fi
+          echo "::add-mask::${token}"
+
+          if FORGE_PUBLISH_TOKEN="${token}" forge-publish generic \
+            "${RUNNER_TEMP}/integration.bin" \
+            --package read-only-auth \
+            --version 1.0.0 \
+            2> "${RUNNER_TEMP}/read-only-auth.log"; then
+            echo "Expected Forgejo to reject a read-only package token." >&2
+            exit 1
+          fi
+          grep -Eq 'HTTP (401|403):' "${RUNNER_TEMP}/read-only-auth.log"
 
       - name: Prepare NPM integration fixtures
         run: |
@@ -191,6 +243,8 @@ jobs:
             "${RUNNER_TEMP}/npm-package-opt-in/lifecycle-events.txt"
 
       - name: Reject invalid authentication
+        env:
+          REQUESTS_CA_BUNDLE: ${{ runner.temp }}/forgejo/cert.pem
         run: |
           printf 'invalid auth integration\n' > "${RUNNER_TEMP}/invalid-auth.bin"
 
@@ -198,10 +252,11 @@ jobs:
             "${RUNNER_TEMP}/invalid-auth.bin" \
             --package invalid-auth \
             --version 1.0.0 \
-            --insecure; then
+            2> "${RUNNER_TEMP}/invalid-auth.log"; then
             echo "Expected Forgejo to reject invalid credentials." >&2
             exit 1
           fi
+          grep -Eq 'HTTP (401|403):' "${RUNNER_TEMP}/invalid-auth.log"
 
       - name: Build Debian fixture
         run: |
@@ -224,13 +279,14 @@ jobs:
             --build "${package_root}" \
             "${RUNNER_TEMP}/forge-publish-integration_1.0.0_all.deb"
 
-      - name: Publish Debian package
+      - name: Publish Debian package with verified TLS
+        env:
+          REQUESTS_CA_BUNDLE: ${{ runner.temp }}/forgejo/cert.pem
         run: |
           forge-publish deb \
             "${RUNNER_TEMP}/forge-publish-integration_1.0.0_all.deb" \
             --distribution integration \
-            --component main \
-            --insecure
+            --component main
 
       - name: Show Forgejo logs on failure
         if: ${{ failure() }}
