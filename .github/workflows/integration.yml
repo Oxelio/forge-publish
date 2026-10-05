@@ -141,28 +141,23 @@ jobs:
           create_fixture() {
             package_root="$1"
             package_version="$2"
-            mkdir -p "${package_root}"
-
-            cat > "${package_root}/package.json" <<EOF
-          {
-            "name": "forge-publish-integration-npm",
-            "version": "${package_version}",
-            "description": "forge-publish integration test package",
-            "publishConfig": {
-              "registry": "https://registry.invalid/",
-              "strict-ssl": false
-            }
-          }
-          EOF
+            cp -R tests/fixtures/npm_lifecycle "${package_root}"
+            jq --arg version "${package_version}" '.version = $version' \
+              "${package_root}/package.json" > "${package_root}/package.json.tmp"
+            mv "${package_root}/package.json.tmp" "${package_root}/package.json"
 
             cat > "${package_root}/.npmrc" <<'EOF'
           strict-ssl=false
+          ignore-scripts=false
           //localhost:3000/api/packages/integration/npm/:_authToken=project-token-must-not-win
           EOF
           }
 
           create_fixture "${RUNNER_TEMP}/npm-package-bundled" "1.0.1"
           create_fixture "${RUNNER_TEMP}/npm-package-minimum" "1.0.0"
+          create_fixture "${RUNNER_TEMP}/npm-package-opt-in" "1.0.2"
+          # Explicit consent must also override a restrictive project setting.
+          printf 'ignore-scripts=true\n' >> "${RUNNER_TEMP}/npm-package-opt-in/.npmrc"
 
       - name: Publish NPM package with bundled npm
         env:
@@ -170,6 +165,7 @@ jobs:
         run: |
           printf 'Bundled npm version: %s\n' "$(npm --version)"
           forge-publish npm "${RUNNER_TEMP}/npm-package-bundled"
+          test ! -e "${RUNNER_TEMP}/npm-package-bundled/lifecycle-events.txt"
 
       - name: Install minimum supported npm
         run: |
@@ -179,7 +175,20 @@ jobs:
       - name: Publish NPM package with minimum npm
         env:
           NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/forgejo/cert.pem
-        run: forge-publish npm "${RUNNER_TEMP}/npm-package-minimum"
+        run: |
+          forge-publish npm "${RUNNER_TEMP}/npm-package-minimum"
+          test ! -e "${RUNNER_TEMP}/npm-package-minimum/lifecycle-events.txt"
+
+      - name: Publish NPM package with explicit pack script consent
+        env:
+          NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/forgejo/cert.pem
+          NPM_TOKEN: fake-npm-token
+          NODE_AUTH_TOKEN: fake-node-token
+        run: |
+          forge-publish npm "${RUNNER_TEMP}/npm-package-opt-in" --allow-pack-scripts
+          printf 'prepack\nprepare\npostpack\n' > "${RUNNER_TEMP}/expected-lifecycle.txt"
+          diff "${RUNNER_TEMP}/expected-lifecycle.txt" \
+            "${RUNNER_TEMP}/npm-package-opt-in/lifecycle-events.txt"
 
       - name: Reject invalid authentication
         run: |

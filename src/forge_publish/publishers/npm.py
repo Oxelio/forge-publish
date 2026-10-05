@@ -160,6 +160,7 @@ def publish(
     directory: Path,
     *,
     dry_run: bool,
+    allow_pack_scripts: bool = False,
 ) -> None:
     package = read_package_json(directory)
 
@@ -181,12 +182,25 @@ def publish(
     print(f"Name     : {name}")
     print(f"Version  : {version}")
     print(f"Registry : {registry}")
+    print(f"Pack scripts: {'enabled' if allow_pack_scripts else 'disabled'}")
+    if allow_pack_scripts:
+        print(
+            "WARNING: Pack lifecycle scripts execute package code. "
+            "Background processes may access later publication credentials. "
+            "Use only with trusted packages."
+        )
+
+    pack_scripts_option = (
+        "--ignore-scripts=false" if allow_pack_scripts else "--ignore-scripts"
+    )
 
     if dry_run:
         print()
         print("DRY RUN")
         print("-------")
-        print("npm pack --pack-destination=<temporary directory>")
+        print(
+            f"npm pack --pack-destination=<temporary directory> {pack_scripts_option}"
+        )
         print(
             f"npm publish <packed .tgz> --registry={registry} "
             "--userconfig=<temporary .npmrc> --strict-ssl=true --ignore-scripts"
@@ -221,6 +235,7 @@ def publish(
                     npm_executable,
                     "pack",
                     f"--pack-destination={temporary_path}",
+                    pack_scripts_option,
                 ],
                 cwd=directory,
                 environment=environment,

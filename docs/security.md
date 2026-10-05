@@ -38,10 +38,12 @@ These checks apply during publication and dry-run. Decoder failures produce a co
 
 NPM publication requires npm 10.5.2 or newer and uses two phases:
 
-1. `npm pack` runs in the package directory before any Forgejo authentication file is created.
+1. `npm pack --ignore-scripts` runs in the package directory before any Forgejo authentication file is created. Pack lifecycle scripts (`prepack`, `prepare`, and `postpack`) are disabled by default through an explicit command-line option.
 2. `npm publish` runs from the temporary directory against the packed `.tgz`, receives a temporary `.npmrc`, forces `--registry` and `--strict-ssl=true`, and uses `--ignore-scripts`.
 
 Before invoking npm, forge-publish removes `FORGE_PUBLISH_TOKEN`, `NPM_TOKEN`, `NODE_AUTH_TOKEN`, and all inherited `npm_config_*` variables from the subprocess environment. Normal network and trust variables such as `HTTPS_PROXY`, `NO_PROXY`, and `NODE_EXTRA_CA_CERTS` remain available.
+
+`--allow-pack-scripts` explicitly re-enables only pack hooks with `--ignore-scripts=false`. Use it only for trusted packages. Hooks execute arbitrary same-user package code with other inherited environment variables; they can start background processes that outlive packing and read the later temporary `.npmrc`. Removing tokens from the synchronous pack environment does not prevent that path. This option forfeits the strong credential-isolation guarantee against package lifecycle code; forge-publish does not sandbox hooks or their descendants. The authenticated publish still uses `--ignore-scripts` in every mode. Build generated files separately before publishing when pack hooks are unnecessary.
 
 The `npm_config_*` rejection is intentionally blanket and case-insensitive. forge-publish does not maintain an allowlist for npm configuration variables, because inherited npm configuration can affect publication-sensitive behavior and standard environment variables already cover the required network/trust cases without weakening registry, credential, or TLS isolation. This means npm-style proxy, CA, retry, timeout, or cache variables are stripped when expressed as `npm_config_*`; use standard variables such as `HTTPS_PROXY`, `NO_PROXY`, and `NODE_EXTRA_CA_CERTS` instead.
 

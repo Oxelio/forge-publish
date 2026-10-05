@@ -70,6 +70,14 @@ forge-publish npm ./my-package
 
 The package must contain a valid `package.json` with a name and version. NPM publishing requires npm 10.5.2 or newer so command-line publication settings reliably take precedence over `publishConfig` values embedded in the package. Prereleases of the minimum 10.5.2 release are not supported: for example, `10.5.2-rc.0` is rejected. A prerelease of a later version, such as `10.5.3-beta.1`, is accepted because it is newer than the minimum supported version.
 
+Pack lifecycle scripts (`prepack`, `prepare`, and `postpack`) are disabled by default with an explicit `npm pack --ignore-scripts`, even if npm configuration enables them. Packages that generate files in these hooks must build those files before publication, or explicitly enable the hooks for a trusted package:
+
+```bash
+forge-publish npm ./my-package --allow-pack-scripts
+```
+
+This option passes `--ignore-scripts=false` only to the pack phase, overriding npm configuration that disables scripts. It executes package code with other inherited environment variables. A hook can leave background processes running that may read the Forgejo credentials introduced later; opt-in therefore forfeits that credential-isolation guarantee. The CLI displays a warning and the selected policy, including during `--dry-run`. Authenticated publication always keeps lifecycle scripts disabled. See [NPM credential isolation](security.md#npm-credential-isolation).
+
 The package is first packed without Forgejo credentials. The generated archive is then published from an isolated temporary directory with a temporary authentication file, TLS verification forced on, lifecycle scripts disabled, and inherited `npm_config_*` settings removed. Project-local `.npmrc`, environment-level npm configuration, and conflicting `publishConfig.registry` or `publishConfig.strict-ssl` values therefore cannot redirect the authenticated publish or disable TLS verification.
 
 Inherited `npm_config_*` variables are intentionally rejected case-insensitively rather than selectively allowlisted, including proxy, custom-CA, retry, timeout, and cache settings expressed through npm configuration. For supported network or trust customization, use standard environment variables such as `HTTPS_PROXY`, `NO_PROXY`, and `NODE_EXTRA_CA_CERTS`; these remain available to npm. This keeps the registry, authentication file, TLS verification, and authenticated publish behavior deterministic.
