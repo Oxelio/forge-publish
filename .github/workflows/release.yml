@@ -28,6 +28,10 @@ jobs:
     if: ${{ !contains(github.event.head_commit.message || '', '[skip ci]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
 
     steps:
       - name: Create release token
@@ -100,14 +104,29 @@ jobs:
           PIP_BUILD_CONSTRAINT: ${{ github.workspace }}/requirements/build.txt
           RELEASE_ARGS: ${{ steps.release-mode.outputs.release_args }}
         run: |
+          rm -rf dist
           if [ "${RELEASE_ARGS}" = "--major" ]; then
             semantic-release version --major
           else
             semantic-release version
           fi
 
+      - name: Generate distribution checksums
+        if: ${{ steps.release-mode.outputs.should_release == 'true' && steps.release.outputs.released == 'true' }}
+        run: bash .github/scripts/release-checksums.sh
+
+      - name: Attest distribution provenance
+        if: ${{ steps.release-mode.outputs.should_release == 'true' && steps.release.outputs.released == 'true' }}
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-checksums: dist/SHA256SUMS
+          create-storage-record: false
+
       - name: Upload distributions to GitHub release
         if: ${{ steps.release-mode.outputs.should_release == 'true' && steps.release.outputs.released == 'true' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: semantic-release publish --tag "${{ steps.release.outputs.tag }}"
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          (cd dist && sha256sum --check SHA256SUMS)
+          semantic-release publish --tag "${RELEASE_TAG}"

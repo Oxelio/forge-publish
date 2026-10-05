@@ -62,3 +62,6 @@ build_command = "python -m build --sdist --wheel ."
 [tool.semantic_release.branches.main]
 match = "main"
 prerelease = false
+
+[tool.semantic_release.publish]
+dist_glob_patterns = ["dist/*.whl", "dist/*.tar.gz", "dist/SHA256SUMS"]

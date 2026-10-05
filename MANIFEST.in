@@ -1,2 +1,3 @@
 include tests/conftest.py
 recursive-include tests/fixtures/npm_lifecycle *.json *.cjs
+include .github/scripts/release-checksums.sh
