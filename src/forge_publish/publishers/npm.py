@@ -14,7 +14,7 @@ from ..client import ForgejoClient
 from ..config import TOKEN_ENV_VAR
 from ..errors import PackageError
 
-MIN_NPM_VERSION = (10, 5, 2)
+MIN_NPM_VERSION = (11, 0, 0)
 MIN_NPM_VERSION_TEXT = ".".join(str(part) for part in MIN_NPM_VERSION)
 NPM_VERSION_PATTERN = re.compile(
     r"^(\d+)\.(\d+)\.(\d+)(?P<prerelease>-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"

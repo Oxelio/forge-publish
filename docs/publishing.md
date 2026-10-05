@@ -68,7 +68,7 @@ or another directory:
 forge-publish npm ./my-package
 ```
 
-The package must contain a valid `package.json` with a name and version. NPM publishing requires npm 10.5.2 or newer so command-line publication settings reliably take precedence over `publishConfig` values embedded in the package. Prereleases of the minimum 10.5.2 release are not supported: for example, `10.5.2-rc.0` is rejected. A prerelease of a later version, such as `10.5.3-beta.1`, is accepted because it is newer than the minimum supported version.
+The package must contain a valid `package.json` with a name and version. NPM publishing requires npm 11.0.0 or newer in every mode, including `--allow-pack-scripts`. This minimum ensures that `--ignore-scripts` also disables `prepare` during packing and that command-line publication settings take precedence over `publishConfig` values. npm 10.x is rejected before packing or creating an authentication file. npm 11.0.0 requires a compatible Node.js runtime (`^20.17.0 || >=22.9.0`). Prereleases of the minimum 11.0.0 release are not supported: for example, `11.0.0-rc.0` is rejected. A prerelease of a later version, such as `11.0.1-beta.1`, is accepted because it is newer than the minimum supported version.
 
 Pack lifecycle scripts (`prepack`, `prepare`, and `postpack`) are disabled by default with an explicit `npm pack --ignore-scripts`, even if npm configuration enables them. Packages that generate files in these hooks must build those files before publication, or explicitly enable the hooks for a trusted package:
 
