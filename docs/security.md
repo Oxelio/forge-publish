@@ -1,5 +1,12 @@
 # Security
 
+## Code scanning
+
+GitHub CodeQL default setup analyzes Python on `main`, pull requests and a weekly
+schedule. Maintainers review alerts in [Security and quality > Code scanning](https://github.com/Oxelio/forge-publish/security/code-scanning).
+See the [development workflow](development.md#codeql-code-scanning) for scan
+configuration, baseline verification and evidence-based alert triage.
+
 ## Forgejo tokens
 
 Treat Forgejo access tokens as secrets.

@@ -191,6 +191,42 @@ Distribution verification installs both the built wheel and the built source dis
 
 Development, CI, integration, and release environments use `requirements/tooling.txt` as an exact constraints set while `pyproject.toml` keeps compatible dependency ranges for normal forge-publish users. Isolated PEP 517 builds use the separate `requirements/build.txt` build constraint so the build backend is deterministic as well. pip itself is pinned in these controlled environments.
 
+## CodeQL code scanning
+
+GitHub manages the repository's CodeQL **default setup** outside the source tree.
+It scans Python with the default high-precision query suite, the remote-sources
+threat model and a standard GitHub-hosted runner. Scans run on pushes and pull
+requests to `main` and protected branches, and on GitHub's weekly schedule.
+There is no custom CodeQL workflow or local installation requirement.
+
+Review results in [Security and quality > Code scanning](https://github.com/Oxelio/forge-publish/security/code-scanning)
+and inspect the tool status there to confirm the analyzed commit, successful
+upload and scan coverage. An empty alert list before a completed analysis is
+not evidence of a clean baseline. Pull requests expose CodeQL check results
+and annotations for findings introduced by their changes.
+
+For each alert, inspect the rule, affected code and any source-to-sink paths.
+Confirm reachability, existing validation and practical impact before deciding
+whether it needs a fix. Track confirmed findings with reproduction details and
+a regression test where practical. Dismiss a false positive or an accepted risk
+only with a specific recorded reason; do not dismiss alerts merely to make a
+check green. See GitHub's [alert assessment guidance](https://docs.github.com/en/code-security/how-tos/manage-security-alerts/manage-code-scanning-alerts/assess-alerts).
+
+CodeQL is complementary to Ruff, pytest, Pyright, Dependency Review and any
+future SonarQube quality analysis. The existing `Quality checks` aggregate
+continues to govern the repository's CI gate; default-setup CodeQL checks are
+separate and are not added to that aggregate. Review security findings before
+merging, without treating every static-analysis warning as an automatic release
+blocker.
+
+Maintainers can inspect or edit default setup under **Settings > Advanced
+Security > CodeQL analysis**. Start with the default suite and evaluate its
+signal before expanding queries or the threat model. The remote-sources model
+is not a claim that every local CLI input is covered. If a concrete requirement
+cannot be met by default setup, document the reason before switching to an
+advanced workflow, and avoid running both configurations. See GitHub's
+[default-setup documentation](https://docs.github.com/en/code-security/how-tos/find-and-fix-code-vulnerabilities/configure-code-scanning/configure-code-scanning).
+
 ## Updating Python dependencies
 
 `pyproject.toml` remains the source of compatible runtime, dev, and release
