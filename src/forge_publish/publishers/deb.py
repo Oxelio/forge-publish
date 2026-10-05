@@ -7,7 +7,7 @@ import lzma
 import tarfile
 import zlib
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Protocol
 from urllib.parse import quote
 
 import zstandard
@@ -27,6 +27,12 @@ MAX_CONTROL_FILE_SIZE = 1 * 1024 * 1024
 # while bounding decoder allocations separately from the output limit.
 MAX_LZMA_MEMORY = 128 * 1024 * 1024
 MAX_ZSTD_WINDOW_SIZE = 64 * 1024 * 1024
+
+
+class _BinaryReader(Protocol):
+    """The read operation shared by files and decompression streams."""
+
+    def read(self, size: int = -1, /) -> bytes: ...
 
 
 def _is_control_archive(name: str) -> bool:
@@ -194,7 +200,7 @@ def _read_control_archive(
 
 
 def _read_limited(
-    stream: BinaryIO,
+    stream: _BinaryReader,
     limit: int,
     filename: str,
 ) -> bytes:

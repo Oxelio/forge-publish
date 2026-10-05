@@ -76,6 +76,53 @@ ruff check . --fix
 ruff format .
 ```
 
+## Static type checking
+
+After installing the Python dependencies above, activate that virtual environment
+so `python` selects its interpreter. Install Node.js 24.21.0 and npm 11.0.0 (the
+same versions used by the dedicated CI job), then bootstrap the locked checker:
+
+```bash
+npm install --global npm@11.0.0 --ignore-scripts
+npm ci --prefix .github/typecheck --ignore-scripts
+```
+
+Run the same command locally and in CI, from the repository root:
+
+```bash
+python .github/scripts/typecheck.py
+```
+
+The script invokes the locally installed
+[official npm distribution of Pyright](https://github.com/microsoft/pyright/blob/main/docs/installation.md)
+with the repository's `[tool.pyright]` configuration and `sys.executable`, so it
+uses the same interpreter and installed dependencies as the command above. It
+fails if Node or the installed checker is missing, without downloading a fallback.
+The checker's exact version and package integrity hashes are committed in
+`.github/typecheck/package-lock.json`; `npm ci` refuses lockfile drift. This avoids
+the Python wrapper's separate Node/checker download bootstrap. Node is needed
+only for this check and the existing NPM integration, not the Python test matrix
+or the installed forge-publish CLI. Python tooling constraints are unchanged.
+
+The initial `basic` baseline includes every production module under `src` and
+targets Python 3.11, the oldest supported runtime. It deliberately does not
+include `tests` or `.github/scripts`: their fixture/mocking conventions and
+automation code can be adopted separately. Ruff and pytest continue to cover
+them. No diagnostic is disabled and no broad ignore hides source errors;
+warnings also cause the command to fail. The runtime matrix continues testing
+Python 3.11–3.14 on Linux and Windows.
+
+For progressive adoption, enable `# pyright: strict` in an individual module once
+it has a clean strict baseline, or add test/script directories with their own
+explicit execution environments. Review surfaced errors before increasing the
+global mode. Pyright complements runtime tests; this initial baseline does not
+promise complete third-party typing or global strictness.
+
+To upgrade Pyright, update the exact version in `.github/typecheck/package.json`,
+regenerate its lock with npm 11.0.0, and run `npm ci` plus the check above. Review
+new diagnostics and the dependency diff. Dependabot proposes weekly updates for
+this isolated npm tooling directory.
+
 ## Pre-commit
 
 Install hooks:
@@ -103,6 +150,7 @@ Pull requests run:
 
 - Ruff linting
 - Ruff formatting verification
+- Pyright production-source checking with a locked checker and Python 3.11 baseline
 - universal tooling-constraints regeneration and Ruff/Commitizen hook alignment
 - unit tests with coverage
 - dependency review for pull request dependency changes, blocking newly introduced high/critical known vulnerabilities
@@ -111,7 +159,7 @@ Pull requests run:
 - the full quality suite on Python 3.14
 - Windows compatibility on Python 3.11 and 3.14, including dev/release dependency resolution and `pip check`
 
-The repository ruleset continues to require the `Quality checks` status. CI runs Dependency Review, the main quality suite, Forgejo integration, the Linux compatibility matrix, and the Windows compatibility matrix in parallel. A final job named `Quality checks` depends on all five groups and fails unless every group succeeds.
+The repository ruleset continues to require the `Quality checks` status. CI runs Dependency Review, the main quality suite, Pyright, Forgejo integration, the Linux compatibility matrix, and the Windows compatibility matrix in parallel. A final job named `Quality checks` depends on all six groups and fails unless every group succeeds.
 
 Dependency Review evaluates only dependency changes introduced by the pull request and fails for newly introduced known vulnerabilities with high or critical severity. It uses read-only repository contents permission and reports findings through the GitHub Actions check output. License enforcement is explicitly disabled until the project defines a dependency-license policy. Dependabot remains enabled for weekly GitHub Actions and Python dependency updates; it is complementary to this merge-time review rather than replaced by it.
 
