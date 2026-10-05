@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v2.1.0 (2026-10-05)
+
+### Features
+
+- **release**: Publish checksums and provenance attestations
+  ([`58e6aa7`](https://github.com/Oxelio/forge-publish/commit/58e6aa76bd96a4a68d09e896ed018a353c73e3c9))
+
+
 ## v2.0.0 (2026-10-05)
 
 ### Bug Fixes
