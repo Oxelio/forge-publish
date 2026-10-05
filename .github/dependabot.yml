@@ -1,6 +1,11 @@
 version: 2
 
 updates:
+  - package-ecosystem: npm
+    directory: "/.github/typecheck"
+    schedule:
+      interval: weekly
+
   - package-ecosystem: github-actions
     directory: "/"
     schedule:

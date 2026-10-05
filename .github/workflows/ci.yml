@@ -105,6 +105,46 @@ jobs:
           "${sdist_venv}/bin/forge-publish" --version
           "${sdist_venv}/bin/python" -m forge_publish --help
 
+  typecheck:
+    name: Pyright
+    if: ${{ github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.11"
+
+      - name: Pin pip
+        run: python -m pip install "pip==26.2.1"
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install \
+            --constraint requirements/tooling.txt \
+            --build-constraint requirements/build.txt \
+            -e .
+          python -m pip check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.21.0"
+
+      - name: Install locked type checker
+        run: |
+          npm install --global npm@11.0.0 --ignore-scripts
+          test "$(npm --version)" = "11.0.0"
+          npm ci --prefix .github/typecheck --ignore-scripts
+
+      - name: Check production types
+        run: python .github/scripts/typecheck.py
+
   python:
     name: Python ${{ matrix.python-version }}
     if: ${{ github.event.pull_request.draft == false }}
@@ -179,6 +219,7 @@ jobs:
       - dependency_review
       - integration
       - quality
+      - typecheck
       - python
       - windows
     if: ${{ always() && github.event.pull_request.draft == false }}
@@ -191,18 +232,21 @@ jobs:
           DEPENDENCY_REVIEW_RESULT: ${{ needs.dependency_review.result }}
           INTEGRATION_RESULT: ${{ needs.integration.result }}
           QUALITY_RESULT: ${{ needs.quality.result }}
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
           PYTHON_RESULT: ${{ needs.python.result }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
         run: |
           printf 'Dependency review: %s\n' "${DEPENDENCY_REVIEW_RESULT}"
           printf 'Forgejo integration: %s\n' "${INTEGRATION_RESULT}"
           printf 'Quality suite: %s\n' "${QUALITY_RESULT}"
+          printf 'Pyright: %s\n' "${TYPECHECK_RESULT}"
           printf 'Python matrix: %s\n' "${PYTHON_RESULT}"
           printf 'Windows matrix: %s\n' "${WINDOWS_RESULT}"
 
           if [ "${DEPENDENCY_REVIEW_RESULT}" != "success" ] || \
              [ "${INTEGRATION_RESULT}" != "success" ] || \
              [ "${QUALITY_RESULT}" != "success" ] || \
+             [ "${TYPECHECK_RESULT}" != "success" ] || \
              [ "${PYTHON_RESULT}" != "success" ] || \
              [ "${WINDOWS_RESULT}" != "success" ]; then
             exit 1

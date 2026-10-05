@@ -103,6 +103,8 @@ pre-commit run --all-files
 ```
 
 CI validates Python 3.11 through 3.14 and Windows compatibility.
+It also checks production types with Pyright; see the
+[type-checking setup and local command](docs/development.md#static-type-checking).
 
 ## Design goals
 

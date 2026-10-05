@@ -1,0 +1,7 @@
+{
+  "name": "forge-publish-typecheck",
+  "private": true,
+  "devDependencies": {
+    "pyright": "1.1.414"
+  }
+}
