@@ -2,6 +2,32 @@
 
 <!-- version list -->
 
+## v2.2.0 (2026-10-05)
+
+### Build System
+
+- **deps**: Generate universal tooling constraints
+  ([`59b5c2b`](https://github.com/Oxelio/forge-publish/commit/59b5c2b31dda78df63b90b1ae10ab8be48042289))
+
+### Chores
+
+- **deps**: Bump actions/attest from 4.2.1 to 4.2.2
+  ([`a18bc84`](https://github.com/Oxelio/forge-publish/commit/a18bc845cace871ba678393b8c37470ef1b89b9e))
+
+### Continuous Integration
+
+- **integration**: Restrict Forgejo exposure and token scope
+  ([`c136511`](https://github.com/Oxelio/forge-publish/commit/c136511b17a6b34478e931c78c7bbacbfa10cacf))
+
+- **types**: Add a reproducible Pyright baseline
+  ([`686835d`](https://github.com/Oxelio/forge-publish/commit/686835d169d7a3f350752bbc246f5600bc3864ea))
+
+### Features
+
+- **release**: Publish a validated runtime SBOM
+  ([`c927e77`](https://github.com/Oxelio/forge-publish/commit/c927e77ece1b5e24be7f84d1fd267f1bf78dee0c))
+
+
 ## v2.1.0 (2026-10-05)
 
 ### Features
