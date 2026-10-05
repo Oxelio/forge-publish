@@ -153,8 +153,8 @@ jobs:
           EOF
           }
 
-          create_fixture "${RUNNER_TEMP}/npm-package-bundled" "1.0.1"
-          create_fixture "${RUNNER_TEMP}/npm-package-minimum" "1.0.0"
+          create_fixture "${RUNNER_TEMP}/npm-package-bundled" "1.0.0"
+          create_fixture "${RUNNER_TEMP}/npm-package-minimum" "1.0.1"
           create_fixture "${RUNNER_TEMP}/npm-package-opt-in" "1.0.2"
           # Explicit consent must also override a restrictive project setting.
           printf 'ignore-scripts=true\n' >> "${RUNNER_TEMP}/npm-package-opt-in/.npmrc"
@@ -169,8 +169,8 @@ jobs:
 
       - name: Install minimum supported npm
         run: |
-          npm install --global npm@10.5.2
-          test "$(npm --version)" = "10.5.2"
+          npm install --global npm@11.0.0
+          test "$(npm --version)" = "11.0.0"
 
       - name: Publish NPM package with minimum npm
         env:

@@ -45,11 +45,15 @@ def test_npm_real_pack_lifecycle_policy(
     npm_executable = shutil.which("npm")
     if npm_executable is None:
         pytest.skip("npm is required for the lifecycle fixture")
-    npm._require_supported_npm(
-        npm._get_npm_version(
-            npm_executable, environment=npm._sanitize_npm_environment(os.environ)
-        )
+    npm_version = npm._get_npm_version(
+        npm_executable, environment=npm._sanitize_npm_environment(os.environ)
     )
+    try:
+        npm._require_supported_npm(npm_version)
+    except PackageError as exc:
+        if npm.NPM_VERSION_PATTERN.fullmatch(npm_version) is None:
+            raise
+        pytest.skip(f"Supported npm is required for the lifecycle fixture: {exc}")
     package_dir = tmp_path / "package"
     shutil.copytree(Path(__file__).parent / "fixtures" / "npm_lifecycle", package_dir)
     (package_dir / ".npmrc").write_text(
@@ -230,11 +234,10 @@ def test_sanitize_npm_environment_preserves_network_and_trust_variables() -> Non
 @pytest.mark.parametrize(
     "version",
     [
-        "10.5.2",
-        "10.5.2+build.1",
-        "10.5.3",
-        "10.5.3-beta.1",
         "11.0.0",
+        "11.0.0+build.1",
+        "11.0.1",
+        "11.0.1-beta.1",
         "12.1.0",
     ],
 )
@@ -248,13 +251,16 @@ def test_accepts_supported_npm_versions(version: str) -> None:
         "9.9.9",
         "10.4.9",
         "10.5.1",
-        "10.5.2-alpha.1",
-        "10.5.2-beta.1",
-        "10.5.2-rc.0",
+        "10.5.2",
+        "10.9.9",
+        "11.0.0-alpha.1",
+        "11.0.0-beta.1",
+        "11.0.0-rc.0",
+        "11.0.0-rc.0+build.1",
     ],
 )
 def test_rejects_unsupported_npm_versions(version: str) -> None:
-    with pytest.raises(PackageError, match="npm 10.5.2 or newer is required"):
+    with pytest.raises(PackageError, match="npm 11.0.0 or newer is required"):
         npm._require_supported_npm(version)
 
 
@@ -365,21 +371,37 @@ def test_npm_requires_executable(tmp_path: Path, monkeypatch) -> None:
         )
 
 
-def test_npm_rejects_unsupported_runtime(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize("allow_pack_scripts", [False, True])
+@pytest.mark.parametrize("version", ["10.5.2", "10.9.9", "11.0.0-rc.0", "unknown"])
+def test_npm_rejects_unsupported_runtime(
+    tmp_path: Path, monkeypatch, version: str, allow_pack_scripts: bool
+) -> None:
     package_dir = tmp_path / "package"
     _write_package(package_dir, {"name": "example", "version": "1.0.0"})
     monkeypatch.setattr(npm.shutil, "which", lambda _: "npm")
     monkeypatch.setattr(
         npm,
         "_get_npm_version",
-        lambda *_args, **_kwargs: "10.5.1",
+        lambda *_args, **_kwargs: version,
     )
 
-    with pytest.raises(PackageError, match="npm 10.5.2 or newer is required"):
+    def fail(*args, **kwargs):
+        raise AssertionError("Unsupported npm must not pack or create credentials")
+
+    monkeypatch.setattr(npm, "_run_npm", fail)
+    monkeypatch.setattr(npm, "_write_temporary_npmrc", fail)
+    monkeypatch.setattr(npm.tempfile, "TemporaryDirectory", fail)
+    message = (
+        "Unable to determine npm version"
+        if version == "unknown"
+        else "npm 11.0.0 or newer is required"
+    )
+    with pytest.raises(PackageError, match=message):
         npm.publish(
             client=FakeClient(),
             directory=package_dir,
             dry_run=False,
+            allow_pack_scripts=allow_pack_scripts,
         )
 
 

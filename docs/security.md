@@ -36,7 +36,7 @@ These checks apply during publication and dry-run. Decoder failures produce a co
 
 ## NPM credential isolation
 
-NPM publication requires npm 10.5.2 or newer and uses two phases:
+NPM publication requires npm 11.0.0 or newer in every mode, including `--allow-pack-scripts`, and uses two phases:
 
 1. `npm pack --ignore-scripts` runs in the package directory before any Forgejo authentication file is created. Pack lifecycle scripts (`prepack`, `prepare`, and `postpack`) are disabled by default through an explicit command-line option.
 2. `npm publish` runs from the temporary directory against the packed `.tgz`, receives a temporary `.npmrc`, forces `--registry` and `--strict-ssl=true`, and uses `--ignore-scripts`.
@@ -47,4 +47,4 @@ Before invoking npm, forge-publish removes `FORGE_PUBLISH_TOKEN`, `NPM_TOKEN`, `
 
 The `npm_config_*` rejection is intentionally blanket and case-insensitive. forge-publish does not maintain an allowlist for npm configuration variables, because inherited npm configuration can affect publication-sensitive behavior and standard environment variables already cover the required network/trust cases without weakening registry, credential, or TLS isolation. This means npm-style proxy, CA, retry, timeout, or cache variables are stripped when expressed as `npm_config_*`; use standard variables such as `HTTPS_PROXY`, `NO_PROXY`, and `NODE_EXTRA_CA_CERTS` instead.
 
-Running the authenticated publish outside the package directory prevents a project-local `.npmrc` from overriding the temporary Forgejo credentials or TLS policy. Requiring npm 10.5.2 or newer ensures command-line publication settings take precedence over conflicting `publishConfig` values. Prereleases of the minimum 10.5.2 release, such as `10.5.2-rc.0`, are rejected, while prereleases of later versions, such as `10.5.3-beta.1`, satisfy the implemented version check. The temporary archive and authentication file are removed automatically.
+Running the authenticated publish outside the package directory prevents a project-local `.npmrc` from overriding the temporary Forgejo credentials or TLS policy. Requiring npm 11.0.0 or newer ensures `--ignore-scripts` disables `prepare` during packing and command-line publication settings take precedence over conflicting `publishConfig` values. npm 10.x can execute `prepare` even with `--ignore-scripts` and is rejected before packing or creating authentication files. Prereleases of the minimum 11.0.0 release, such as `11.0.0-rc.0`, are rejected, while prereleases of later versions, such as `11.0.1-beta.1`, satisfy the implemented version check. The temporary archive and authentication file are removed automatically.

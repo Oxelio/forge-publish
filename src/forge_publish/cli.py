@@ -195,7 +195,7 @@ def npm_command(
     allow_pack_scripts: bool,
     dry_run: bool,
 ):
-    """Publish an NPM package."""
+    """Publish an NPM package (requires npm 11.0.0 or newer)."""
     try:
         client = _create_client(
             dry_run=dry_run,

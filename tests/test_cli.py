@@ -345,6 +345,7 @@ def test_npm_help_describes_explicit_pack_consent() -> None:
     assert result.exit_code == 0, result.output
     assert "--allow-pack-scripts" in result.output
     help_text = " ".join(result.output.split())
+    assert "requires npm 11.0.0 or newer" in help_text
     assert "disabled by default" in help_text
     assert "trusted packages" in help_text
     assert "later publication credentials" in help_text
