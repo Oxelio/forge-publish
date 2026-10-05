@@ -1,0 +1,4 @@
+# Project runtime, dev and release requirements come from pyproject.toml.
+# Only bootstrap tools not declared by the project belong here.
+-r generator.txt
+pip==26.2.1

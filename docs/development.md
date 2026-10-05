@@ -103,12 +103,13 @@ Pull requests run:
 
 - Ruff linting
 - Ruff formatting verification
+- universal tooling-constraints regeneration and Ruff/Commitizen hook alignment
 - unit tests with coverage
 - dependency review for pull request dependency changes, blocking newly introduced high/critical known vulnerabilities
 - wheel and sdist build verification
-- Python 3.11, 3.12, and 3.13 compatibility jobs on Linux
+- Python 3.11, 3.12, and 3.13 compatibility jobs on Linux, including dev/release dependency resolution and `pip check`
 - the full quality suite on Python 3.14
-- Windows compatibility on Python 3.11 and 3.14
+- Windows compatibility on Python 3.11 and 3.14, including dev/release dependency resolution and `pip check`
 
 The repository ruleset continues to require the `Quality checks` status. CI runs Dependency Review, the main quality suite, Forgejo integration, the Linux compatibility matrix, and the Windows compatibility matrix in parallel. A final job named `Quality checks` depends on all five groups and fails unless every group succeeds.
 
@@ -126,17 +127,75 @@ Development, CI, integration, and release environments use `requirements/tooling
 
 ## Updating Python dependencies
 
-Python dependency updates should be isolated in a dedicated dependency PR:
+`pyproject.toml` remains the source of compatible runtime, dev, and release
+requirements. `requirements/tooling.in` adds only bootstrap pip and the generator
+from `requirements/generator.txt`. The latter pins uv independently, so a stale
+or invalid generated closure cannot prevent installing the resolver.
+
+The [uv universal resolver](https://docs.astral.sh/uv/concepts/resolution/)
+generates `requirements/tooling.txt` for the complete Python 3.11–3.14 range on
+Linux and Windows, selected in `[tool.uv].environments`. Conditional dependencies
+retain environment markers; this is not a lock of only the developer's platform.
+`requirements/build.txt` continues to constrain isolated builds separately.
+Adding a supported Python version/platform requires extending this target policy
+and the CI matrix together.
+
+Bootstrap the generator once:
+
+```bash
+python -m pip install -r requirements/generator.txt
+```
+
+Regenerate the constraints and align pre-commit Ruff/Commitizen revisions with
+one command from the repository root:
+
+```bash
+python .github/scripts/tooling-constraints.py
+```
+
+Existing pins are resolution preferences, so regeneration retains reviewed
+versions when compatible. It resolves the entire graph and can move a coupled
+dependency when needed; it does not force an incompatible transitive pin. For a
+deliberate upgrade, request the parent package (repeat the option for several):
+
+```bash
+python .github/scripts/tooling-constraints.py --upgrade-package pydantic
+```
+
+An exact parent requirement, such as `python-semantic-release`, must first be
+changed in `pyproject.toml`. To upgrade uv itself, edit `generator.txt` and
+bootstrap it again before regenerating. Do not edit transitive pins by hand.
+Ruff and Commitizen must resolve to one version across supported environments;
+the generator refuses ambiguous hook versions and preserves hook options.
+
+Verify reproducible regeneration without writing tracked files:
+
+```bash
+python .github/scripts/tooling-constraints.py --check
+```
+
+This check needs package-index metadata/network access (or an already populated
+uv cache). CI runs it in the authoritative quality job, and the existing matrix
+installs the constrained dev/release graph and runs `pip check` on every tested
+platform/Python combination. Runtime ranges for normal users remain unchanged.
+
+Python dependency updates belong in a dedicated dependency PR:
 
 1. review the direct dependency ranges in `pyproject.toml`;
-2. refresh exact versions in `requirements/tooling.txt` and, when needed, `requirements/build.txt`;
+2. regenerate `requirements/tooling.txt` and hook revisions with the command above; update `requirements/build.txt` separately when needed;
 3. use a clean environment and install `.[dev,release]` with the candidate constraints;
 4. run `pip check`, the local quality checks, and the full GitHub Actions matrix;
 5. verify the real Forgejo integration before merging.
 
-The tooling constraints intentionally include the union of relevant conditional dependencies for Python 3.11-3.14, Linux, and Windows. A constraint does not cause a package to be installed by itself; it fixes the version only when that package is required in the current environment.
+The tooling constraints include the union of relevant conditional dependencies for Python 3.11-3.14, Linux, and Windows. A constraint does not cause a package to be installed by itself; it fixes the version only when required and its marker matches the environment. These pins are not a promise for other platforms or future Python versions.
 
-Dependabot checks both the `pip` ecosystem and GitHub Actions weekly, so dependency changes arrive as reviewable pull requests rather than silently changing CI resolution. Third-party GitHub Actions remain pinned to full commit SHAs, with the corresponding major version documented inline.
+Dependabot checks both the `pip` ecosystem and GitHub Actions weekly. All Python
+updates share one `python-tooling` group, avoiding isolated coupled transitive
+updates such as `pydantic-core`. Regenerate and review its proposed changes on
+the same PR before merging; the generation check rejects stale/inconsistent
+output and hook drift. Dependency PRs never regenerate or merge themselves.
+Third-party GitHub Actions remain pinned to full commit SHAs, with the
+corresponding major version documented inline.
 
 ## Adding a publisher
 
