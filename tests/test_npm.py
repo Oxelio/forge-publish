@@ -1,5 +1,8 @@
 import json
+import os
+import shutil
 import subprocess
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -35,9 +38,64 @@ def _mock_supported_npm(monkeypatch) -> None:
     )
 
 
+@pytest.mark.parametrize("allow_pack_scripts", [False, True])
+def test_npm_real_pack_lifecycle_policy(
+    tmp_path: Path, monkeypatch, allow_pack_scripts: bool
+) -> None:
+    npm_executable = shutil.which("npm")
+    if npm_executable is None:
+        pytest.skip("npm is required for the lifecycle fixture")
+    npm._require_supported_npm(
+        npm._get_npm_version(
+            npm_executable, environment=npm._sanitize_npm_environment(os.environ)
+        )
+    )
+    package_dir = tmp_path / "package"
+    shutil.copytree(Path(__file__).parent / "fixtures" / "npm_lifecycle", package_dir)
+    (package_dir / ".npmrc").write_text(
+        f"ignore-scripts={str(allow_pack_scripts).lower()}\n"
+        f"cache={tmp_path.as_posix()}/cache\nupdate-notifier=false\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(TOKEN_ENV_VAR, "fake-forge-token")
+    monkeypatch.setenv("NPM_TOKEN", "fake-npm-token")
+    monkeypatch.setenv("NODE_AUTH_TOKEN", "fake-node-token")
+    monkeypatch.setenv("NpM_CoNfIg_Ignore_Scripts", "false")
+    run_npm = npm._run_npm
+    published = []
+
+    def run_without_upload(command, *, cwd, environment, operation):
+        if operation == "pack":
+            run_npm(command, cwd=cwd, environment=environment, operation=operation)
+        else:
+            assert operation == "publish"
+            assert "--ignore-scripts" in command
+            assert Path(command[2]).is_file()
+            with tarfile.open(command[2]) as archive:
+                marker = "package/lifecycle-events.txt"
+                if allow_pack_scripts:
+                    with archive.extractfile(marker) as file:
+                        assert file.read() == b"prepack\nprepare\n"
+                else:
+                    assert marker not in archive.getnames()
+            published.append(command)
+
+    monkeypatch.setattr(npm, "_run_npm", run_without_upload)
+    options = {"allow_pack_scripts": True} if allow_pack_scripts else {}
+    npm.publish(client=FakeClient(), directory=package_dir, dry_run=False, **options)
+    assert len(published) == 1
+    marker = package_dir / "lifecycle-events.txt"
+    if allow_pack_scripts:
+        assert marker.read_text(encoding="utf-8") == "prepack\nprepare\npostpack\n"
+    else:
+        assert not marker.exists()
+
+
+@pytest.mark.parametrize("allow_pack_scripts", [False, True])
 def test_npm_packs_without_credentials_before_authenticated_publish(
     tmp_path: Path,
     monkeypatch,
+    allow_pack_scripts: bool,
 ) -> None:
     package_dir = tmp_path / "package"
     _write_package(
@@ -85,6 +143,10 @@ def test_npm_packs_without_credentials_before_authenticated_publish(
 
         if command[1] == "pack":
             assert cwd == package_dir
+            expected_option = (
+                "--ignore-scripts=false" if allow_pack_scripts else "--ignore-scripts"
+            )
+            assert command == ["npm", "pack", command[2], expected_option]
             assert not any(item.startswith("--userconfig=") for item in command)
             destination = Path(command[2].split("=", 1)[1])
             assert not (destination / ".npmrc").exists()
@@ -122,6 +184,7 @@ def test_npm_packs_without_credentials_before_authenticated_publish(
         client=FakeClient(),
         directory=package_dir,
         dry_run=False,
+        allow_pack_scripts=allow_pack_scripts,
     )
 
     assert [command[1] for command in commands] == ["pack", "publish"]

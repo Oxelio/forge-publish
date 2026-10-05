@@ -69,6 +69,8 @@ Publish an NPM package:
 forge-publish npm
 ```
 
+NPM pack lifecycle scripts are disabled by default. Build generated files before publishing, or use `--allow-pack-scripts` only for trusted packages. Enabling hooks can expose later publication credentials to background processes; see [NPM publishing](docs/publishing.md#npm).
+
 All publishing commands support `--dry-run`.
 
 ## Documentation

@@ -180,9 +180,19 @@ def generic_command(
     ),
     default=".",
 )
+@click.option(
+    "--allow-pack-scripts",
+    is_flag=True,
+    help=(
+        "Execute npm pack lifecycle scripts (disabled by default). "
+        "Only use with trusted packages: background processes may access "
+        "later publication credentials."
+    ),
+)
 @click.option("--dry-run", is_flag=True)
 def npm_command(
     directory: Path,
+    allow_pack_scripts: bool,
     dry_run: bool,
 ):
     """Publish an NPM package."""
@@ -195,6 +205,7 @@ def npm_command(
             client=client,
             directory=directory,
             dry_run=dry_run,
+            allow_pack_scripts=allow_pack_scripts,
         )
     except ForgePublishError as exc:
         raise click.ClickException(str(exc)) from exc

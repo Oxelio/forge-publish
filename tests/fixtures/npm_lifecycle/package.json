@@ -1,0 +1,17 @@
+{
+  "name": "forge-publish-integration-npm",
+  "version": "1.0.0",
+  "description": "Benign npm lifecycle regression fixture",
+  "scripts": {
+    "prepack": "node lifecycle.cjs",
+    "prepare": "node lifecycle.cjs",
+    "postpack": "node lifecycle.cjs",
+    "prepublishOnly": "node lifecycle.cjs",
+    "publish": "node lifecycle.cjs",
+    "postpublish": "node lifecycle.cjs"
+  },
+  "publishConfig": {
+    "registry": "https://registry.invalid/",
+    "strict-ssl": false
+  }
+}

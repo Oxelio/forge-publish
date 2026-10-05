@@ -303,6 +303,51 @@ def test_npm_uses_current_directory_by_default(
 
     assert result.exit_code == 0, result.output
     assert captured["directory"] == Path(".")
+    assert captured["allow_pack_scripts"] is False
+
+
+@pytest.mark.parametrize("allow_pack_scripts", [False, True])
+def test_npm_dry_run_shows_lifecycle_policy(
+    tmp_path: Path, monkeypatch, allow_pack_scripts: bool
+) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"name": "example", "version": "1.0.0"}', encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        cli,
+        "load_config",
+        lambda *, require_token: Config(
+            url="https://forge.example.com", owner="Software", username="user"
+        ),
+    )
+
+    def fail(*args, **kwargs):
+        raise AssertionError("dry-run must not execute npm or create credentials")
+
+    monkeypatch.setattr(cli.npm.shutil, "which", fail)
+    monkeypatch.setattr(cli.npm, "_run_npm", fail)
+    monkeypatch.setattr(cli.npm, "_write_temporary_npmrc", fail)
+    args = ["npm", str(tmp_path), "--dry-run"]
+    if allow_pack_scripts:
+        args.append("--allow-pack-scripts")
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    option = "--ignore-scripts=false" if allow_pack_scripts else "--ignore-scripts"
+    assert (
+        f"npm pack --pack-destination=<temporary directory> {option}\n" in result.output
+    )
+    assert "--strict-ssl=true --ignore-scripts\n" in result.output
+    assert ("WARNING: Pack lifecycle scripts" in result.output) is allow_pack_scripts
+
+
+def test_npm_help_describes_explicit_pack_consent() -> None:
+    result = CliRunner().invoke(main, ["npm", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "--allow-pack-scripts" in result.output
+    help_text = " ".join(result.output.split())
+    assert "disabled by default" in help_text
+    assert "trusted packages" in help_text
+    assert "later publication credentials" in help_text
 
 
 def test_npm_invalid_utf8_is_reported_without_traceback(
