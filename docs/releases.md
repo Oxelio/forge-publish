@@ -27,7 +27,18 @@ The workflow:
 5. builds the wheel and source distribution
 6. creates the release commit and tag
 7. creates the GitHub Release
-8. uploads the distribution artifacts
+8. generates `SHA256SUMS` for the built wheel and source distribution
+9. signs build provenance attestations for those digests using GitHub OIDC
+10. verifies the checksums again and uploads the distributions and manifest
+
+The artifacts are built once by `semantic-release version`; `semantic-release
+publish` uploads those same files without rebuilding them. Only wheels, source
+distributions and `SHA256SUMS` are selected for upload. Checksum generation,
+attestation and upload run only when Semantic Release reports a new release;
+a no-release run skips all three. An attestation or checksum failure prevents
+artifact upload, although the release commit, tag and GitHub Release may already
+exist. Review the failed run before attempting recovery; do not substitute
+rebuilt artifacts for the attested bytes.
 
 Release tooling is declared in the `release` optional dependency group in `pyproject.toml`. The release workflow pins pip and installs `.[release]` using `requirements/tooling.txt`, while isolated package builds use `requirements/build.txt`. This keeps the release environment and build backend deterministic without turning forge-publish's normal runtime dependency ranges into exact user-facing pins.
 
@@ -55,6 +66,47 @@ The repository ruleset currently requires pull requests and the `Quality checks`
 
 Keep normal users subject to the existing ruleset.
 
+The release job's `GITHUB_TOKEN` has only `contents: read`, `id-token: write`
+and `attestations: write`. It obtains a short-lived signing certificate via
+OIDC and stores provenance in GitHub's attestation service. The separate App
+token retains responsibility for release commits, tags and asset uploads;
+it is not used for attestation signing. No long-lived signing key is added.
+
+## Verify downloaded artifacts
+
+For releases produced by this workflow, download the wheel, source distribution
+and `SHA256SUMS` from the same GitHub Release into an empty directory. For example,
+replace `vX.Y.Z` below with the intended release tag:
+
+```bash
+gh release download vX.Y.Z --repo Oxelio/forge-publish \
+    --pattern '*.whl' --pattern '*.tar.gz' --pattern SHA256SUMS
+sha256sum --check SHA256SUMS
+```
+
+The manifest uses the standard GNU SHA-256 checksum format with artifact
+basenames, so verification works from the download directory. On macOS,
+`shasum -a 256 --check SHA256SUMS` is an alternative. Older releases do not
+retroactively gain checksums or attestations.
+
+Checksums detect changed bytes; verify the signed provenance as well to establish
+which repository and workflow produced them. With an authenticated, current
+GitHub CLI that supports artifact attestations:
+
+```bash
+for artifact in *.whl *.tar.gz; do
+    gh attestation verify "$artifact" --repo Oxelio/forge-publish \
+        --signer-workflow Oxelio/forge-publish/.github/workflows/release.yml
+done
+```
+
+Inspect the verification output for the expected source commit and workflow.
+The attestation identifies the triggering workflow commit; Semantic Release
+bumps the project version and builds within that run before creating its release
+commit and tag. Attestations are available through GitHub's repository
+attestation service and the workflow summary, rather than as additional release
+assets. They prove origin and integrity, not that an artifact is free of defects.
+
 ## Local verification
 
 Preview the next release:
@@ -62,6 +114,19 @@ Preview the next release:
 ```bash
 semantic-release -v --noop version
 ```
+
+After a local distribution build, exercise checksum generation without signing
+or publishing anything:
+
+```bash
+bash .github/scripts/release-checksums.sh
+```
+
+The Linux release-script regression tests cover both distribution digests,
+repeatable output, missing distributions, upload selection and detection of
+modified bytes. PR CI does not publish releases or request release attestations;
+OIDC signing and remote attachment must also be verified on a release workflow
+run by downloading its assets and executing the consumer commands above.
 
 Create all local release changes without a commit or tag:
 
