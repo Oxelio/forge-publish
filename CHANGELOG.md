@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v2.2.1 (2026-10-06)
+
+### Bug Fixes
+
+- **security**: Remove plaintext npm token storage and document CodeQL
+  ([#68](https://github.com/Oxelio/forge-publish/pull/68),
+  [`9cf620d`](https://github.com/Oxelio/forge-publish/commit/9cf620d52c9ff54a63f571b4e51cd8f36277940c))
+
+
 ## v2.2.0 (2026-10-05)
 
 ### Build System
