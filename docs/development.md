@@ -184,8 +184,9 @@ Pull requests run:
 - Python 3.11, 3.12, and 3.13 compatibility jobs on Linux, including dev/release dependency resolution and `pip check`
 - the full quality suite on Python 3.14
 - Windows compatibility on Python 3.11 and 3.14, including dev/release dependency resolution and `pip check`
+- SonarQube Cloud analysis and the Sonar Way Quality Gate for trusted pull requests
 
-The repository ruleset continues to require the `Quality checks` status. CI runs Dependency Review, the main quality suite, Pyright, Forgejo integration, the Linux compatibility matrix, and the Windows compatibility matrix in parallel. A final job named `Quality checks` depends on all six groups and fails unless every group succeeds.
+The repository ruleset continues to require the `Quality checks` status. CI runs Dependency Review, the main quality suite, Pyright, Forgejo integration, the Linux compatibility matrix, the Windows compatibility matrix, and SonarQube Cloud in parallel. A final job named `Quality checks` depends on all seven groups and fails unless every validation succeeds. Sonar is required for internal pull requests; for fork pull requests, the aggregate accepts only the expected `skipped` result because the secret-bearing job cannot safely run untrusted code.
 
 Dependency Review evaluates only dependency changes introduced by the pull request and fails for newly introduced known vulnerabilities with high or critical severity. It uses read-only repository contents permission and reports findings through the GitHub Actions check output. License enforcement is explicitly disabled until the project defines a dependency-license policy. Dependabot remains enabled for weekly GitHub Actions and Python dependency updates; it is complementary to this merge-time review rather than replaced by it.
 
@@ -290,13 +291,14 @@ Development, CI, integration, and release environments use `requirements/tooling
 
 ## SonarQube Cloud quality analysis
 
-The integration is prepared for **SonarQube Cloud** with the built-in **Sonar
-Way** Quality Gate. External project provisioning and successful baseline/PR
-analysis must be confirmed before calling the rollout complete. Sonar is
-initially a **non-required signal**: its analysis job waits for the gate and
-reports failures, but is not a dependency of `Quality checks` or a separate
-required repository check. Do not interpret missing setup or a failed analysis
-as a passing Quality Gate.
+The integration uses **SonarQube Cloud** with the built-in **Sonar Way** Quality
+Gate. For internal pull requests, its analysis job waits for the gate and must
+succeed for the required `Quality checks` aggregate to pass. Fork pull requests
+must produce the expected Sonar skip because they cannot receive the repository
+secret. Sonar is not a separate required repository check. Do not interpret
+missing setup or a failed analysis as a passing Quality Gate. Baseline findings
+and actual fork-PR behavior still need validation before calling the rollout
+complete.
 
 ### Maintainer setup
 
@@ -337,19 +339,21 @@ threshold remains authoritative. Sonar Way provides complementary new-code
 reliability, security, maintainability, hotspot-review, coverage and duplication
 checks; do not add a duplicate global 85% gate in Sonar. Contributors can inspect
 findings and the gate through the Sonar PR decoration/project link and the
-Actions analysis logs. Triage baseline findings before tightening enforcement.
+Actions analysis logs. Review and triage baseline findings as part of rollout
+validation before tightening the Quality Gate policy further.
 
 Forks, including dependency-bot PRs from external repositories, cannot enter
 the secret-bearing Sonar call. This is an expected skip, not evidence of a
 successful analysis. No `pull_request_target` or privileged `workflow_run`
 consumes PR code or artifacts. Missing variables/token on an internal PR or
-`main` cause an explicit setup failure in the non-required analysis job.
+`main` cause an explicit setup failure in the analysis job; on internal pull
+requests, this also fails the required `Quality checks` aggregate.
 
-Once main/PR analysis, coverage import, decoration and useful gate results are
-demonstrated, make a separate reviewed rollout change to include Sonar in
-`Quality checks`. That change must distinguish the expected fork skip from an
-analysis or gate failure, and retain the stable required check rather than
-adding a separate long-term required Sonar check.
+The aggregate accepts only Sonar `success` for internal pull requests and only
+Sonar `skipped` for fork pull requests. An analysis or gate failure, cancellation,
+or unexpected skip on an internal PR blocks merging. The other validation groups
+must succeed in both contexts. Keep `Quality checks` as the stable required
+check when changing the Sonar policy.
 
 ## CodeQL code scanning
 
