@@ -64,6 +64,8 @@ def test_npm_real_pack_lifecycle_policy(
     monkeypatch.setenv(TOKEN_ENV_VAR, "fake-forge-token")
     monkeypatch.setenv("NPM_TOKEN", "fake-npm-token")
     monkeypatch.setenv("NODE_AUTH_TOKEN", "fake-node-token")
+    monkeypatch.setenv(npm.NPM_PUBLISH_TOKEN_ENV_VAR, "fake-publish-token")
+    monkeypatch.setenv("FoRgE_PuBlIsH_NpM_AuTh_ToKeN", "fake-mixed-case-token")
     monkeypatch.setenv("NpM_CoNfIg_Ignore_Scripts", "false")
     run_npm = npm._run_npm
     published = []
@@ -96,10 +98,13 @@ def test_npm_real_pack_lifecycle_policy(
 
 
 @pytest.mark.parametrize("allow_pack_scripts", [False, True])
+@pytest.mark.parametrize("failure_operation", [None, "--version", "pack", "publish"])
 def test_npm_packs_without_credentials_before_authenticated_publish(
     tmp_path: Path,
     monkeypatch,
     allow_pack_scripts: bool,
+    failure_operation: str | None,
+    capsys,
 ) -> None:
     package_dir = tmp_path / "package"
     _write_package(
@@ -123,7 +128,9 @@ def test_npm_packs_without_credentials_before_authenticated_publish(
 
     observed_npmrc: Path | None = None
     observed_archive: Path | None = None
+    observed_temporary_directory: Path | None = None
     commands: list[list[str]] = []
+    preparation_environment: dict[str, str] | None = None
 
     monkeypatch.setenv(TOKEN_ENV_VAR, "environment-secret-token")
     monkeypatch.setenv("NPM_TOKEN", "npm-token")
@@ -131,11 +138,23 @@ def test_npm_packs_without_credentials_before_authenticated_publish(
     monkeypatch.setenv("NPM_CONFIG_STRICT_SSL", "false")
     monkeypatch.setenv("npm_config_registry", "https://environment.invalid/")
     monkeypatch.setenv("NODE_EXTRA_CA_CERTS", "/tmp/forge-ca.pem")
+    monkeypatch.setenv(npm.NPM_PUBLISH_TOKEN_ENV_VAR, "inherited-publish-token")
+    monkeypatch.setenv("FoRgE_PuBlIsH_NpM_AuTh_ToKeN", "mixed-case-publish-token")
     monkeypatch.setattr(npm.shutil, "which", lambda _: "npm")
-    _mock_supported_npm(monkeypatch)
+    original_environment = dict(os.environ)
+    client = FakeClient()
+    token = client.config.token
+    assert token is not None
+    forbidden_values = [
+        token,
+        "environment-secret-token",
+        "inherited-publish-token",
+        "mixed-case-publish-token",
+    ]
 
-    def fake_run(command, cwd, check, env):
-        nonlocal observed_npmrc, observed_archive
+    def fake_run(command, check, env, cwd=None, **kwargs):
+        nonlocal observed_npmrc, observed_archive, preparation_environment
+        nonlocal observed_temporary_directory
 
         commands.append(command)
         assert check is True
@@ -144,6 +163,26 @@ def test_npm_packs_without_credentials_before_authenticated_publish(
         assert "NODE_AUTH_TOKEN" not in env
         assert not any(key.casefold().startswith("npm_config_") for key in env)
         assert env["NODE_EXTRA_CA_CERTS"] == "/tmp/forge-ca.pem"
+        assert all(value not in " ".join(command) for value in forbidden_values)
+        assert dict(os.environ) == original_environment
+
+        if command[1] in {"--version", "pack"}:
+            assert not any(
+                key.casefold() == npm.NPM_PUBLISH_TOKEN_ENV_VAR.casefold()
+                for key in env
+            )
+            assert all(value not in env.values() for value in forbidden_values)
+            if preparation_environment is None:
+                preparation_environment = env
+            else:
+                assert env is preparation_environment
+
+        if command[1] == "--version":
+            assert command == ["npm", "--version"]
+            assert kwargs == {"capture_output": True, "text": True}
+            if failure_operation == "--version":
+                raise subprocess.CalledProcessError(2, command, output=token)
+            return subprocess.CompletedProcess(command, 0, stdout="11.0.0\n")
 
         if command[1] == "pack":
             assert cwd == package_dir
@@ -153,7 +192,10 @@ def test_npm_packs_without_credentials_before_authenticated_publish(
             assert command == ["npm", "pack", command[2], expected_option]
             assert not any(item.startswith("--userconfig=") for item in command)
             destination = Path(command[2].split("=", 1)[1])
+            observed_temporary_directory = destination
             assert not (destination / ".npmrc").exists()
+            if failure_operation == "pack":
+                raise subprocess.CalledProcessError(2, command, stderr=token)
             observed_archive = destination / "example-1.0.0.tgz"
             observed_archive.write_bytes(b"package")
             return
@@ -177,25 +219,59 @@ def test_npm_packs_without_credentials_before_authenticated_publish(
         observed_npmrc = Path(userconfig)
         content = observed_npmrc.read_text(encoding="utf-8")
 
-        assert "secret-token" in content
+        assert content == (
+            "registry=https://forge.example.com/api/packages/Software/npm/\n"
+            "strict-ssl=true\n"
+            "//forge.example.com/api/packages/Software/npm/:_authToken="
+            "${FORGE_PUBLISH_NPM_AUTH_TOKEN}\n"
+        )
+        assert all(value not in content for value in forbidden_values)
+        for file in cwd.iterdir():
+            assert all(
+                value.encode() not in file.read_bytes() for value in forbidden_values
+            )
+        assert env is not preparation_environment
+        assert preparation_environment is not None
+        assert env == {**preparation_environment, npm.NPM_PUBLISH_TOKEN_ENV_VAR: token}
+        assert not any(
+            key.casefold() == npm.NPM_PUBLISH_TOKEN_ENV_VAR.casefold()
+            for key in preparation_environment
+        )
         assert "project-token" not in content
         assert "strict-ssl=true" in content
         assert ("//forge.example.com/api/packages/Software/npm/:_authToken=") in content
+        if failure_operation == "publish":
+            raise subprocess.CalledProcessError(3, command, output=token, stderr=token)
 
     monkeypatch.setattr(npm.subprocess, "run", fake_run)
 
-    npm.publish(
-        client=FakeClient(),
-        directory=package_dir,
-        dry_run=False,
-        allow_pack_scripts=allow_pack_scripts,
-    )
+    def publish():
+        npm.publish(
+            client=client,
+            directory=package_dir,
+            dry_run=False,
+            allow_pack_scripts=allow_pack_scripts,
+        )
 
-    assert [command[1] for command in commands] == ["pack", "publish"]
-    assert observed_npmrc is not None
-    assert not observed_npmrc.exists()
-    assert observed_archive is not None
-    assert not observed_archive.exists()
+    operations = ["--version", "pack", "publish"]
+    if failure_operation is None:
+        publish()
+    else:
+        with pytest.raises(PackageError, match="failed with exit code") as error:
+            publish()
+        assert all(value not in str(error.value) for value in forbidden_values)
+        operations = operations[: operations.index(failure_operation) + 1]
+    assert [command[1] for command in commands] == operations
+    if observed_npmrc is not None:
+        assert not observed_npmrc.exists()
+    if observed_archive is not None:
+        assert not observed_archive.exists()
+    if observed_temporary_directory is not None:
+        assert not observed_temporary_directory.exists()
+    assert dict(os.environ) == original_environment
+    output = capsys.readouterr()
+    assert all(value not in output.out + output.err for value in forbidden_values)
+    assert ("published successfully" in output.out) is (failure_operation is None)
 
 
 def test_sanitize_npm_environment_removes_tokens_and_all_npm_config() -> None:
@@ -203,6 +279,8 @@ def test_sanitize_npm_environment_removes_tokens_and_all_npm_config() -> None:
         "FoRgE_PuBlIsH_ToKeN": "forge-token",
         "nPm_ToKeN": "npm-token",
         "NoDe_AuTh_ToKeN": "node-token",
+        npm.NPM_PUBLISH_TOKEN_ENV_VAR: "publish-token",
+        "FoRgE_PuBlIsH_NpM_AuTh_ToKeN": "mixed-case-token",
         "NPM_CONFIG_STRICT_SSL": "false",
         "npm_config_registry": "https://environment.invalid/",
         "NpM_CoNfIg_UsErCoNfIg": "/tmp/untrusted-npmrc",
@@ -211,10 +289,12 @@ def test_sanitize_npm_environment_removes_tokens_and_all_npm_config() -> None:
         ),
         "PATH": "/usr/bin",
     }
+    original = source.copy()
 
     sanitized = npm._sanitize_npm_environment(source)
 
     assert sanitized == {"PATH": "/usr/bin"}
+    assert source == original
 
 
 def test_sanitize_npm_environment_preserves_network_and_trust_variables() -> None:

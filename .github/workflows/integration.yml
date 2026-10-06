@@ -208,6 +208,7 @@ jobs:
           create_fixture "${RUNNER_TEMP}/npm-package-bundled" "1.0.0"
           create_fixture "${RUNNER_TEMP}/npm-package-minimum" "1.0.1"
           create_fixture "${RUNNER_TEMP}/npm-package-opt-in" "1.0.2"
+          create_fixture "${RUNNER_TEMP}/npm-package-invalid-auth" "1.0.3"
           # Explicit consent must also override a restrictive project setting.
           printf 'ignore-scripts=true\n' >> "${RUNNER_TEMP}/npm-package-opt-in/.npmrc"
 
@@ -216,7 +217,7 @@ jobs:
           NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/forgejo/cert.pem
         run: |
           printf 'Bundled npm version: %s\n' "$(npm --version)"
-          forge-publish npm "${RUNNER_TEMP}/npm-package-bundled"
+          python .github/scripts/npm-integration.py "${RUNNER_TEMP}/npm-package-bundled"
           test ! -e "${RUNNER_TEMP}/npm-package-bundled/lifecycle-events.txt"
 
       - name: Install minimum supported npm
@@ -228,7 +229,7 @@ jobs:
         env:
           NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/forgejo/cert.pem
         run: |
-          forge-publish npm "${RUNNER_TEMP}/npm-package-minimum"
+          python .github/scripts/npm-integration.py "${RUNNER_TEMP}/npm-package-minimum"
           test ! -e "${RUNNER_TEMP}/npm-package-minimum/lifecycle-events.txt"
 
       - name: Publish NPM package with explicit pack script consent
@@ -236,11 +237,22 @@ jobs:
           NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/forgejo/cert.pem
           NPM_TOKEN: fake-npm-token
           NODE_AUTH_TOKEN: fake-node-token
+          FoRgE_PuBlIsH_NpM_AuTh_ToKeN: mixed-case-token-must-not-reach-hooks
         run: |
-          forge-publish npm "${RUNNER_TEMP}/npm-package-opt-in" --allow-pack-scripts
+          python .github/scripts/npm-integration.py \
+            "${RUNNER_TEMP}/npm-package-opt-in" --allow-pack-scripts
           printf 'prepack\nprepare\npostpack\n' > "${RUNNER_TEMP}/expected-lifecycle.txt"
           diff "${RUNNER_TEMP}/expected-lifecycle.txt" \
             "${RUNNER_TEMP}/npm-package-opt-in/lifecycle-events.txt"
+
+      - name: Reject NPM authentication without leaking credentials
+        env:
+          NODE_EXTRA_CA_CERTS: ${{ runner.temp }}/forgejo/cert.pem
+          FORGE_PUBLISH_TOKEN: invalid-npm-integration-credential
+        run: |
+          python .github/scripts/npm-integration.py \
+            "${RUNNER_TEMP}/npm-package-invalid-auth" --expect-auth-failure
+          test ! -e "${RUNNER_TEMP}/npm-package-invalid-auth/lifecycle-events.txt"
 
       - name: Reject invalid authentication
         env:

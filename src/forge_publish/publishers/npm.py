@@ -16,11 +16,13 @@ from ..errors import PackageError
 
 MIN_NPM_VERSION = (11, 0, 0)
 MIN_NPM_VERSION_TEXT = ".".join(str(part) for part in MIN_NPM_VERSION)
+NPM_PUBLISH_TOKEN_ENV_VAR = "FORGE_PUBLISH_NPM_AUTH_TOKEN"
 NPM_VERSION_PATTERN = re.compile(
     r"^(\d+)\.(\d+)\.(\d+)(?P<prerelease>-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
 )
 NPM_TOKEN_ENV_VARS = {
     TOKEN_ENV_VAR.casefold(),
+    NPM_PUBLISH_TOKEN_ENV_VAR.casefold(),
     "npm_token",
     "node_auth_token",
 }
@@ -56,12 +58,14 @@ def _npm_auth_key(registry: str) -> str:
 def _write_temporary_npmrc(
     directory: Path,
     registry: str,
-    token: str,
 ) -> Path:
     npmrc = directory / ".npmrc"
 
     npmrc.write_text(
-        (f"registry={registry}\nstrict-ssl=true\n{_npm_auth_key(registry)}={token}\n"),
+        (
+            f"registry={registry}\nstrict-ssl=true\n"
+            f"{_npm_auth_key(registry)}=${{{NPM_PUBLISH_TOKEN_ENV_VAR}}}\n"
+        ),
         encoding="utf-8",
     )
 
@@ -251,8 +255,9 @@ def publish(
             npmrc = _write_temporary_npmrc(
                 temporary_path,
                 registry,
-                token,
             )
+            publish_environment = environment.copy()
+            publish_environment[NPM_PUBLISH_TOKEN_ENV_VAR] = token
 
             _run_npm(
                 [
@@ -265,7 +270,7 @@ def publish(
                     "--ignore-scripts",
                 ],
                 cwd=temporary_path,
-                environment=environment,
+                environment=publish_environment,
                 operation="publish",
             )
 
