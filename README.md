@@ -17,6 +17,12 @@ The project focuses on explicit publication targets, secure credential handling,
 - A Forgejo account and access token
 - npm 11.0.0 or newer and a compatible Node.js runtime only when publishing NPM packages. npm 11.0.0 requires Node.js `^20.17.0 || >=22.9.0`. Prereleases of the minimum 11.0.0 release, such as 11.0.0-rc.0, are not supported; prereleases of later versions, such as 11.0.1-beta.1, satisfy the version check.
 
+Forgejo compatibility targets are **15.x LTS** and **16.x stable**, with explicit
+patch releases tested in the [compatibility matrix](.github/workflows/compatibility.yml).
+A release line is supported only after its integration suite passes and while
+it remains maintained upstream. See the [support policy](docs/development.md#forgejo-compatibility-and-support)
+for validation, updates and end-of-life handling.
+
 ## Installation
 
 ```bash

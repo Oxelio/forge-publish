@@ -1,0 +1,36 @@
+name: Forgejo compatibility
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+  # Validate matrix changes before they reach the scheduled main-branch run.
+  # Ordinary pull requests keep the single reference test in CI.
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/compatibility.yml
+      - .github/workflows/integration.yml
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: Forgejo ${{ matrix.forgejo-version }} compatibility
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        forgejo-version:
+          - "15.0.9"
+          - "16.0.5"
+    uses: ./.github/workflows/integration.yml
+    with:
+      forgejo-version: ${{ matrix.forgejo-version }}

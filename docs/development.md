@@ -183,6 +183,61 @@ checks reduce fixture exposure and privilege; running on a self-hosted runner
 still requires Docker, the workflow's Linux tools, an available loopback port,
 and isolation from unrelated jobs using the same Docker daemon.
 
+### Forgejo compatibility and support
+
+forge-publish supports explicitly validated Forgejo release lines that are still
+maintained upstream. The current compatibility targets are **15.x LTS** at
+**15.0.9** and **16.x stable** at **16.0.5**. Support requires a successful full
+integration job for the pinned patch release; adding a matrix entry alone does
+not establish compatibility. Inspect the version-labelled jobs in
+[Forgejo compatibility runs](https://github.com/Oxelio/forge-publish/actions/workflows/compatibility.yml)
+and the reference integration job in
+[CI](https://github.com/Oxelio/forge-publish/actions/workflows/ci.yml) for evidence.
+The fixture verifies the server's reported version before any publication.
+
+[Forgejo's upstream releases](https://forgejo.org/releases/) list maintenance
+status. At this policy's introduction, 15.x LTS is maintained until 15 July 2027
+and 16.x stable until 29 October 2026. Upstream EOL ends our support even if an
+older integration job passed. Unlisted or EOL releases may work, but carry no
+support commitment. Supporting these server lines does not promise testing
+every patch, server configuration, database backend or deployment topology.
+
+Ordinary pull requests continue using only the 16.0.5 reference in the existing
+`Quality checks` aggregate. The separate `compatibility.yml` workflow runs every
+Monday at 05:23 UTC and can be started with **Run workflow**. It reuses
+`integration.yml` for every matrix entry, covering Generic, Debian, both npm
+versions, pack-script consent, authentication rejection and TLS verification.
+It also runs on pull requests that change either integration workflow, so a
+matrix update is validated before merge. `fail-fast: false` allows both versions
+to report independently. Scheduled failures are visible per version and require
+investigation; the compatibility workflow is not an additional required status
+and does not retroactively block unrelated PRs. Repository protections remain
+unchanged.
+
+To update the supported set:
+
+1. Check upstream maintenance status and release notes. Select an explicit patch
+   release; new upstream majors are candidates until validated, not automatically
+   supported.
+2. Inspect its official image, for example
+   `docker buildx imagetools inspect codeberg.org/forgejo/forgejo:15.0.9`, and review
+   the digest and runner architecture. Add the version/digest pair to the closed
+   image selection in `integration.yml`; never substitute a mutable `latest` tag.
+3. Update the dispatch choices in `integration.yml` and the version matrix in
+   `compatibility.yml`. When advancing the PR reference, update both input
+   defaults in `integration.yml` as well.
+4. Run the complete compatibility matrix on the update PR or manually on its
+   branch. Inspect every version's job, including npm isolation and TLS/auth
+   checks. Document a release line as supported only after its suite succeeds.
+5. Update this policy and README. Keep previously validated, maintained lines
+   until upstream EOL unless an earlier removal has an explicit documented
+   decision. Remove EOL versions from the matrix and image selection; if the
+   reference reaches EOL, move it to a newly validated maintained line too.
+
+Unsupported reusable-workflow version inputs fail before starting a container.
+The ordinary PR default remains pinned in the reusable workflow, so matrix
+changes cannot silently change the required reference integration.
+
 For NPM, both compatibility publications deliberately include conflicting project-local NPM authentication and TLS settings plus conflicting `publishConfig.registry` and `publishConfig.strict-ssl` values. Each publish must still use the temporary Forgejo credentials and verified TLS through Node's `NODE_EXTRA_CA_CERTS` mechanism.
 
 The shared `tests/fixtures/npm_lifecycle` fixture records harmless pack-hook events and rejects credential environment variables or authenticated publish hooks. Both npm compatibility publications verify that no pack hook runs by default, even with project `ignore-scripts=false`. A third publication uses explicit `--allow-pack-scripts` consent with the minimum npm version and project `ignore-scripts=true`, verifying all three pack hooks and preserving script-free authenticated publication. The local pytest lifecycle tests execute real npm pack when supported npm is available, intercept the upload, and inspect the archive with fake tokens; these tests skip when npm is absent or unsupported, while Forgejo CI always provisions supported npm. Unit tests verify that unsupported npm is rejected in both modes before packing or creating authentication files.
