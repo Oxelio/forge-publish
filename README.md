@@ -78,6 +78,7 @@ All publishing commands support `--dry-run`.
 - [Configuration](docs/configuration.md)
 - [Publishing packages](docs/publishing.md)
 - [Security](docs/security.md)
+- [Vulnerability reporting and supported versions](.github/SECURITY.md)
 - [Development](docs/development.md)
 - [Release process](docs/releases.md)
 

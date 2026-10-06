@@ -1,5 +1,9 @@
 # Security
 
+To report a suspected vulnerability privately or check which releases receive
+security fixes, see the [security policy](../.github/SECURITY.md). This page
+describes the CLI's security behavior.
+
 ## Code scanning
 
 GitHub CodeQL default setup analyzes Python on `main`, pull requests and a weekly
