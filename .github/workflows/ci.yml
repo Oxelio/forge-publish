@@ -249,6 +249,7 @@ jobs:
       - typecheck
       - python
       - windows
+      - sonar
     if: ${{ always() && github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -262,6 +263,8 @@ jobs:
           TYPECHECK_RESULT: ${{ needs.typecheck.result }}
           PYTHON_RESULT: ${{ needs.python.result }}
           WINDOWS_RESULT: ${{ needs.windows.result }}
+          SONAR_RESULT: ${{ needs.sonar.result }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
         run: |
           printf 'Dependency review: %s\n' "${DEPENDENCY_REVIEW_RESULT}"
           printf 'Forgejo integration: %s\n' "${INTEGRATION_RESULT}"
@@ -269,6 +272,7 @@ jobs:
           printf 'Pyright: %s\n' "${TYPECHECK_RESULT}"
           printf 'Python matrix: %s\n' "${PYTHON_RESULT}"
           printf 'Windows matrix: %s\n' "${WINDOWS_RESULT}"
+          printf 'SonarQube Cloud: %s\n' "${SONAR_RESULT}"
 
           if [ "${DEPENDENCY_REVIEW_RESULT}" != "success" ] || \
              [ "${INTEGRATION_RESULT}" != "success" ] || \
@@ -276,5 +280,15 @@ jobs:
              [ "${TYPECHECK_RESULT}" != "success" ] || \
              [ "${PYTHON_RESULT}" != "success" ] || \
              [ "${WINDOWS_RESULT}" != "success" ]; then
+            exit 1
+          fi
+
+          if [ "${IS_FORK}" = "true" ]; then
+            if [ "${SONAR_RESULT}" != "skipped" ]; then
+              echo 'Expected SonarQube Cloud to be skipped for a fork pull request.' >&2
+              exit 1
+            fi
+          elif [ "${SONAR_RESULT}" != "success" ]; then
+            echo 'SonarQube Cloud must succeed for an internal pull request.' >&2
             exit 1
           fi

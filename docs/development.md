@@ -184,8 +184,9 @@ Pull requests run:
 - Python 3.11, 3.12, and 3.13 compatibility jobs on Linux, including dev/release dependency resolution and `pip check`
 - the full quality suite on Python 3.14
 - Windows compatibility on Python 3.11 and 3.14, including dev/release dependency resolution and `pip check`
+- SonarQube Cloud analysis and the Sonar Way Quality Gate for trusted pull requests
 
-The repository ruleset continues to require the `Quality checks` status. CI runs Dependency Review, the main quality suite, Pyright, Forgejo integration, the Linux compatibility matrix, and the Windows compatibility matrix in parallel. A final job named `Quality checks` depends on all six groups and fails unless every group succeeds.
+The repository ruleset continues to require the `Quality checks` status. CI runs Dependency Review, the main quality suite, Pyright, Forgejo integration, the Linux compatibility matrix, the Windows compatibility matrix, and SonarQube Cloud in parallel. A final job named `Quality checks` depends on all seven groups and fails unless every validation succeeds. Sonar is required for internal pull requests; for fork pull requests, the aggregate accepts only the expected `skipped` result because the secret-bearing job cannot safely run untrusted code.
 
 Dependency Review evaluates only dependency changes introduced by the pull request and fails for newly introduced known vulnerabilities with high or critical severity. It uses read-only repository contents permission and reports findings through the GitHub Actions check output. License enforcement is explicitly disabled until the project defines a dependency-license policy. Dependabot remains enabled for weekly GitHub Actions and Python dependency updates; it is complementary to this merge-time review rather than replaced by it.
 
