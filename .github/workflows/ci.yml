@@ -97,6 +97,10 @@ jobs:
           python .github/scripts/release-sbom.py \
             --python "${RUNNER_TEMP}/forge-publish-wheel/bin/python"
           bash .github/scripts/release-checksums.sh
+          release_tag="v$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          python .github/scripts/pypi-distributions.py \
+            --assets dist --output "${RUNNER_TEMP}/forge-publish-pypi-dist" \
+            --tag "${release_tag}"
 
       - name: Verify built sdist in clean environment
         run: |
