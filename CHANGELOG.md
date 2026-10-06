@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v2.3.0 (2026-10-06)
+
+### Continuous Integration
+
+- Test supported Forgejo lines weekly ([#70](https://github.com/Oxelio/forge-publish/pull/70),
+  [`a945794`](https://github.com/Oxelio/forge-publish/commit/a945794dbfa2c7c3c7b23ecc09add5ba5a6fe523))
+
+### Documentation
+
+- **repo**: Document squash-only pull request policy
+  ([#71](https://github.com/Oxelio/forge-publish/pull/71),
+  [`3156785`](https://github.com/Oxelio/forge-publish/commit/31567857f8334a340d495e845a13eff7c4b0818d))
+
+- **security**: Add private vulnerability reporting policy
+  ([#69](https://github.com/Oxelio/forge-publish/pull/69),
+  [`ba0a5fd`](https://github.com/Oxelio/forge-publish/commit/ba0a5fd17d02d7f05666572ee3bbeca1a20bfa48))
+
+### Features
+
+- **distribution**: Publish validated releases to PyPI
+  ([#72](https://github.com/Oxelio/forge-publish/pull/72),
+  [`dabb623`](https://github.com/Oxelio/forge-publish/commit/dabb623b4bbe9326b6c14b0c96cbc26aedce7990))
+
+
 ## v2.2.1 (2026-10-06)
 
 ### Bug Fixes
