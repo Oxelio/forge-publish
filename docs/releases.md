@@ -67,6 +67,19 @@ The repository ruleset currently requires pull requests and the `Quality checks`
 
 Keep normal users subject to the existing ruleset.
 
+Normal pull requests are squash-merged, with merge commits and rebase merging
+disabled in both repository settings and the `main` ruleset. The default squash
+message uses the PR title and description. Conventional Commit PR titles with
+GitHub's PR number suffix become the squash titles used for version calculation.
+GitHub deletes merged topic branches automatically.
+Keep the existing required `Quality checks` check and strict up-to-date policy
+when maintaining these settings. See the
+[contributor merge policy](development.md#pull-requests-and-merge-policy).
+
+The release App's **Always allow** bypass remains an exception for its generated
+release commits and tags. Restricting normal PR merge methods must preserve that
+bypass and its existing permissions; no additional bypass actor is needed.
+
 The release job's `GITHUB_TOKEN` has only `contents: read`, `id-token: write`
 and `attestations: write`. It obtains a short-lived signing certificate via
 OIDC and stores provenance in GitHub's attestation service. The separate App

@@ -144,6 +144,27 @@ test(client): cover an HTTP error
 chore(ci): update the Python matrix
 ```
 
+## Pull requests and merge policy
+
+`main` is the only permanent branch. Create a topic branch for each change and
+open a pull request targeting `main`. Normal pull requests use **Squash and
+merge** only; repository settings and the `main` ruleset exclude merge commits
+and rebase merging. GitHub automatically deletes merged topic branches.
+
+Use a Conventional Commit title for the pull request: it becomes the squash
+commit title and determines Semantic Release's version calculation. The default
+squash message uses the PR title and description. Keep GitHub's PR number suffix
+in the final squash title, for example `fix(cli): reject invalid input (#72)`.
+Review the final message so intermediate working commits do not independently
+influence the release.
+
+Merge only after the required `Quality checks` gate succeeds on the current
+head and the branch is up to date with `main`, as required by the ruleset.
+Review comments and resolve requested changes before merging. The release App's
+existing bypass is reserved for generated release commits and tags; normal
+contributions follow the pull-request protections. See the
+[release App and ruleset configuration](releases.md#github-app-and-branch-ruleset).
+
 ## CI
 
 Pull requests run:
