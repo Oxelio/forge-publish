@@ -288,6 +288,69 @@ a new GitHub Release succeeds; see [PyPI distribution](releases.md#pypi-distribu
 
 Development, CI, integration, and release environments use `requirements/tooling.txt` as an exact constraints set while `pyproject.toml` keeps compatible dependency ranges for normal forge-publish users. Isolated PEP 517 builds use the separate `requirements/build.txt` build constraint so the build backend is deterministic as well. pip itself is pinned in these controlled environments.
 
+## SonarQube Cloud quality analysis
+
+The integration is prepared for **SonarQube Cloud** with the built-in **Sonar
+Way** Quality Gate. External project provisioning and successful baseline/PR
+analysis must be confirmed before calling the rollout complete. Sonar is
+initially a **non-required signal**: its analysis job waits for the gate and
+reports failures, but is not a dependency of `Quality checks` or a separate
+required repository check. Do not interpret missing setup or a failed analysis
+as a passing Quality Gate.
+
+### Maintainer setup
+
+1. Import this public GitHub repository into the intended SonarQube Cloud
+   organization. Copy the real organization key, project key and regional
+   server URL from its CI setup instructions; do not infer them from the
+   repository name. Confirm the Sonar GitHub integration can decorate PRs.
+2. Disable Automatic Analysis and select CI-based analysis so Python XML
+   coverage is imported. Select the built-in **Sonar Way** gate and confirm
+   `main` is the project's main branch. Review its new-code definition before
+   assessing the baseline.
+3. Under GitHub **Settings > Secrets and variables > Actions**, create repository
+   variables `SONAR_ORGANIZATION`, `SONAR_PROJECT_KEY` and `SONAR_HOST_URL` with
+   the copied non-secret values. The URL must use HTTPS and identify the chosen
+   Cloud region. Create repository secret `SONAR_TOKEN` with analysis permission
+   for this project. Never put its value in source, an issue or a workflow log.
+4. After the workflow is on `main`, run **SonarQube Cloud** manually from `main`
+   or inspect its next non-release push run. Inspect **Sonar analysis and Quality
+   Gate** in Actions and the linked Cloud project: verify the analyzed SHA,
+   source/test classification, imported coverage, baseline findings and gate
+   result. Generated `[skip ci]` release commits do not repeat the analysis.
+5. Verify an internal PR produces analysis and PR decoration, imports its own
+   coverage report and reports the actual Sonar Way result. Record this evidence
+   in #30. Verify a fork PR skips the Sonar job without receiving the secret.
+
+PR analysis reuses `coverage.xml` from CI's quality job through the
+`sonar-coverage` artifact in the **same workflow run**. The dedicated main-branch
+workflow produces that report with one constrained pytest run; it does not run
+another PR test suite. Coverage uses repository-relative paths so the XML is
+portable between runners. Analysis uses full Git history and the same checkout
+SHA as the report. Artifacts expire after one day; rerunning an analysis after
+expiry requires regenerating its coverage in that run. Local pytest, Ruff and
+Pyright need no Sonar account, token or scanner.
+
+Production sources are `src`, tests are `tests`, and supported Python versions
+are 3.11–3.14. No source exclusions are added. The pytest 85% branch-aware global
+threshold remains authoritative. Sonar Way provides complementary new-code
+reliability, security, maintainability, hotspot-review, coverage and duplication
+checks; do not add a duplicate global 85% gate in Sonar. Contributors can inspect
+findings and the gate through the Sonar PR decoration/project link and the
+Actions analysis logs. Triage baseline findings before tightening enforcement.
+
+Forks, including dependency-bot PRs from external repositories, cannot enter
+the secret-bearing Sonar call. This is an expected skip, not evidence of a
+successful analysis. No `pull_request_target` or privileged `workflow_run`
+consumes PR code or artifacts. Missing variables/token on an internal PR or
+`main` cause an explicit setup failure in the non-required analysis job.
+
+Once main/PR analysis, coverage import, decoration and useful gate results are
+demonstrated, make a separate reviewed rollout change to include Sonar in
+`Quality checks`. That change must distinguish the expected fork skip from an
+analysis or gate failure, and retain the stable required check rather than
+adding a separate long-term required Sonar check.
+
 ## CodeQL code scanning
 
 GitHub manages the repository's CodeQL **default setup** outside the source tree.

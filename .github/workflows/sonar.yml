@@ -1,0 +1,115 @@
+name: SonarQube Cloud
+
+on:
+  workflow_call:
+    secrets:
+      SONAR_TOKEN:
+        required: false
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sonar-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    name: Main coverage
+    # PRs receive the quality job's report from the same workflow run.
+    if: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message || '', '[skip ci]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout analyzed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14"
+
+      - name: Pin pip
+        run: python -m pip install "pip==26.2.1"
+
+      - name: Install constrained test dependencies
+        run: |
+          python -m pip install \
+            --constraint requirements/tooling.txt \
+            --build-constraint requirements/build.txt \
+            -e ".[dev,release]"
+          python -m pip check
+
+      - name: Generate branch-aware XML coverage
+        run: pytest
+
+      - name: Export coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sonar-coverage
+          path: coverage.xml
+          if-no-files-found: error
+          retention-days: 1
+
+  analysis:
+    name: Sonar analysis and Quality Gate
+    needs: coverage
+    # always() permits the expected coverage-job skip in a trusted PR call.
+    # Failed main coverage, forks, drafts and non-main manual runs cannot scan.
+    if: >-
+      ${{ always() && !cancelled() &&
+          ((github.event_name == 'pull_request' &&
+            github.event.pull_request.draft == false &&
+            github.event.pull_request.head.repo.full_name == github.repository) ||
+           (github.ref == 'refs/heads/main' && needs.coverage.result == 'success')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Require provisioned Cloud project
+        env:
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          missing=false
+          for name in SONAR_ORGANIZATION SONAR_PROJECT_KEY SONAR_HOST_URL SONAR_TOKEN; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Configure ${name} before enabling Sonar analysis; see docs/development.md."
+              missing=true
+            fi
+          done
+          if [ "${missing}" = true ]; then exit 1; fi
+          case "${SONAR_HOST_URL}" in
+            https://*) ;;
+            *) echo '::error::SONAR_HOST_URL must be the HTTPS URL from the Cloud project setup.'; exit 1 ;;
+          esac
+
+      - name: Checkout analyzed commit with history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Import coverage from this workflow run
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sonar-coverage
+
+      - name: Analyze and report the Sonar Way gate
+        uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        with:
+          args: >-
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300

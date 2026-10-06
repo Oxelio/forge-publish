@@ -56,6 +56,10 @@ addopts = [
     "--cov-fail-under=85",
 ]
 
+[tool.coverage.run]
+# Keep XML paths portable between the pytest runner and the Sonar analysis job.
+relative_files = true
+
 [tool.uv]
 # Universal constraints generation covers the supported CI environments.
 environments = [

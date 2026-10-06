@@ -35,6 +35,7 @@ htmlcov/
 .mypy_cache/
 .pyre/
 .pytype/
+.scannerwork/
 node_modules/
 
 # Linters / formatters
