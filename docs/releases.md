@@ -31,6 +31,10 @@ The workflow:
 9. generates `SHA256SUMS` for both distributions and the SBOM
 10. signs build provenance attestations for those digests using GitHub OIDC
 11. verifies the checksums again and uploads the distributions, SBOM and manifest
+12. retrieves that release's assets in a separate `pypi` job, checks every
+    checksum, and uploads only the unchanged wheel and sdist to PyPI using OIDC
+13. installs the package actually served by PyPI with pipx in a clean environment,
+    compares its wheel with the GitHub asset and verifies both CLI entry points
 
 The artifacts are built once by `semantic-release version`; `semantic-release
 publish` uploads those same files without rebuilding them. Only wheels, source
@@ -44,6 +48,60 @@ rebuilt artifacts for the attested bytes.
 Release tooling is declared in the `release` optional dependency group in `pyproject.toml`. The release workflow pins pip and installs `.[release]` using `requirements/tooling.txt`, while isolated package builds use `requirements/build.txt`. This keeps the release environment and build backend deterministic without turning forge-publish's normal runtime dependency ranges into exact user-facing pins.
 
 Dependency updates are made through dedicated pull requests. Dependabot monitors the pip ecosystem weekly, and the exact constraints are reviewed together with the full CI and real Forgejo integration before merging.
+
+## PyPI distribution
+
+PyPI is the primary end-user channel, with `pipx install forge-publish` as the
+recommended installation. GitHub Releases remain authoritative for release
+notes, SHA256SUMS, SBOMs and GitHub provenance. The first PyPI publication must
+exercise the normal post-merge release workflow and live validation described
+below; existing GitHub-only releases must not be manually backfilled.
+
+Before enabling this workflow on `main`, a maintainer must configure:
+
+- a GitHub Environment named **`pypi`**, restricted to deployment from **`main`**;
+- a PyPI Trusted Publisher for project **`forge-publish`**, GitHub owner
+  **`Oxelio`**, repository **`forge-publish`**, workflow **`release.yml`**,
+  environment **`pypi`**.
+
+If the project does not exist yet, add a
+[Pending Trusted Publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
+from the maintainer's PyPI account. Verify that PyPI accepts this project name;
+an anonymous 404 does not establish registrability or ownership. A pending
+publisher does not reserve the name, so verify it again before the first upload.
+If it belongs to another account or cannot be registered, stop and obtain a
+maintainer decision; do not substitute another distribution name.
+
+No PyPI token/password repository secret is needed. The publishing job alone
+gets `id-token: write` for PyPI, independently of the existing release job's
+OIDC permission for GitHub attestations. It has read-only repository contents,
+uses the pinned [PyPA publishing action](https://github.com/pypa/gh-action-pypi-publish),
+and does not install or build this package. Checkout credentials are not
+persisted. The subsequent installation smoke job has no OIDC or write access.
+
+The release job exposes only its new-release flag and exact tag. A successful
+new release on `main` is required before the PyPI job runs, including manual
+dispatches; no-release runs and dispatches on other branches cannot publish.
+The job downloads that tag's wheel, sdist, SBOM and SHA256SUMS. The validator
+requires exactly those files and one correct checksum per artifact, checks the
+versioned filenames against the tag, and stages only the two distributions.
+It fails before upload on extra/missing files or any checksum error. Neither
+job rebuilds the package or uploads the SBOM/checksum manifest to PyPI.
+
+The separate smoke job waits for the uploaded version to become visible with
+a bounded retry, downloads its wheel from PyPI and compares the actual bytes
+with GitHub. It then runs the documented `pipx install forge-publish`, verifies
+the installed version matches the new release, exercises `--version`, `--help`
+and `python -m forge_publish --help`, runs `pip check`, and uninstalls the CLI.
+This validation needs a real PyPI publication; local wheel/sdist checks alone
+cannot satisfy it. The first normal release after merge must exercise this
+permanent workflow before issue #45 can be closed.
+
+A failed upload or smoke test does not undo the GitHub Release or files already
+published on PyPI. Inspect the failed run and PyPI state before recovery. The
+action deliberately does not skip existing files; preserve the exact validated
+bytes, never rebuild or silently overwrite a version. A retry that produces
+no new semantic release skips publication rather than backfilling an old tag.
 
 ## GitHub App and branch ruleset
 

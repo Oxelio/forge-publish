@@ -36,6 +36,12 @@ release = [
 [project.scripts]
 forge-publish = "forge_publish.cli:main"
 
+[project.urls]
+Repository = "https://github.com/Oxelio/forge-publish"
+Issues = "https://github.com/Oxelio/forge-publish/issues"
+Releases = "https://github.com/Oxelio/forge-publish/releases"
+Security = "https://github.com/Oxelio/forge-publish/blob/main/.github/SECURITY.md"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

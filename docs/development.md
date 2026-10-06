@@ -4,8 +4,13 @@
 
 Python 3.11 through 3.14 are supported.
 
+Use an editable installation only when developing from a source checkout.
+For normal CLI use, follow the [end-user installation](../README.md#installation).
+Activate the virtual environment before installing the source package:
+
 ```bash
 python -m venv .venv
+# Activate .venv using your shell's activation command.
 python -m pip install "pip==26.2.1"
 python -m pip install \
     --constraint requirements/tooling.txt \
@@ -274,6 +279,12 @@ stderr and npm debug logs for token values before displaying output. Rejected
 authentication must fail at publication, not preparation or TLS validation.
 
 Distribution verification installs both the built wheel and the built source distribution into separate clean virtual environments, runs `pip check`, and exercises the installed CLI from each artifact. The quality job reuses that runtime-only wheel environment to generate and schema-validate the release SBOM and verify its distribution/SBOM checksums. See [Release SBOM](releases.md#release-sbom) for its profile and consumer limitations. Release dependencies are validated with `pip check` as well.
+
+The same quality job stages the generated release assets through the PyPI
+checksum validator without uploading anything. Its regression tests reject
+tampering, missing/duplicate manifest entries, path traversal, wrong versions
+and unexpected assets. PyPI uploads and installation smoke tests run only after
+a new GitHub Release succeeds; see [PyPI distribution](releases.md#pypi-distribution).
 
 Development, CI, integration, and release environments use `requirements/tooling.txt` as an exact constraints set while `pyproject.toml` keeps compatible dependency ranges for normal forge-publish users. Isolated PEP 517 builds use the separate `requirements/build.txt` build constraint so the build backend is deterministic as well. pip itself is pinned in these controlled environments.
 

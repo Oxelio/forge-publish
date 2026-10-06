@@ -2,6 +2,7 @@ include tests/conftest.py
 recursive-include tests/fixtures/npm_lifecycle *.json *.cjs
 include .github/scripts/release-checksums.sh
 include .github/scripts/release-sbom.py
+include .github/scripts/pypi-distributions.py
 include .github/scripts/tooling-constraints.py
 include .github/scripts/typecheck.py
 include .github/typecheck/package.json

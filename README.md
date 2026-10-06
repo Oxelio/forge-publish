@@ -25,16 +25,49 @@ for validation, updates and end-of-life handling.
 
 ## Installation
 
-```bash
-python -m venv .venv
-python -m pip install -e .
-```
-
-Then verify the installation:
+Use [pipx](https://pipx.pypa.io/stable/installation/) to install the CLI from
+PyPI in its own isolated Python environment:
 
 ```bash
+pipx install forge-publish
+forge-publish --version
 forge-publish --help
 ```
+
+Upgrade or uninstall it with:
+
+```bash
+pipx upgrade forge-publish
+pipx uninstall forge-publish
+```
+
+For a reproducible version selection, use `pipx install forge-publish==X.Y.Z`,
+replacing `X.Y.Z` with a published version. Python 3.11 or newer is required;
+use pipx's `--python` option if your default interpreter is older.
+
+For a version not available on PyPI, including GitHub-only releases published
+before the first PyPI upload, download the versioned wheel from
+[GitHub Releases](https://github.com/Oxelio/forge-publish/releases),
+[verify its checksum and provenance](docs/releases.md#verify-downloaded-artifacts),
+then install that file, for example:
+
+```bash
+pipx install ./forge_publish-2.2.1-py3-none-any.whl
+```
+
+Alternatively, install a published PyPI version in an activated virtual
+environment. This also supports `python -m forge_publish`:
+
+```bash
+python -m venv .venv
+# Activate .venv using your shell's activation command.
+python -m pip install forge-publish
+python -m forge_publish --help
+```
+
+Use `python -m pip install --upgrade forge-publish` and
+`python -m pip uninstall forge-publish` in that environment for upgrades/removal.
+Editable source installations are described in [Development](docs/development.md#setup).
 
 ## Quick start
 
@@ -90,15 +123,8 @@ All publishing commands support `--dry-run`.
 
 ## Development
 
-Install development dependencies:
-
-```bash
-python -m pip install "pip==26.2.1"
-python -m pip install \
-    --constraint requirements/tooling.txt \
-    --build-constraint requirements/build.txt \
-    -e ".[dev]"
-```
+Follow the [development setup](docs/development.md#setup) for an editable source
+checkout and its constrained development dependencies.
 
 Run the checks:
 
