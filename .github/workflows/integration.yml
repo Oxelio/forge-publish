@@ -2,18 +2,50 @@ name: Forgejo integration
 
 on:
   workflow_call:
+    inputs:
+      forgejo-version:
+        description: Explicit Forgejo patch release to test
+        type: string
+        default: "16.0.5"
   workflow_dispatch:
+    inputs:
+      forgejo-version:
+        description: Explicit Forgejo patch release to test
+        type: choice
+        default: "16.0.5"
+        options:
+          - "15.0.9"
+          - "16.0.5"
 
 permissions:
   contents: read
 
 jobs:
   integration:
-    name: Forgejo 16.0.5
+    name: Forgejo ${{ inputs.forgejo-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      FORGEJO_VERSION: ${{ inputs.forgejo-version }}
 
     steps:
+      - name: Select pinned Forgejo image
+        run: |
+          case "${FORGEJO_VERSION}" in
+            15.0.9)
+              image="codeberg.org/forgejo/forgejo:15.0.9@sha256:91a5310c86934339e16bd06b6078aada836e3d8935b2d70f6598108cbfaed5d1"
+              ;;
+            16.0.5)
+              image="codeberg.org/forgejo/forgejo:16.0.5@sha256:cf5f5ae6acf2ababca0ee3d255705b83a47f35b25e07fc931d694d60664053fe"
+              ;;
+            *)
+              echo "Unsupported integration version: ${FORGEJO_VERSION}" >&2
+              exit 1
+              ;;
+          esac
+          echo "FORGEJO_IMAGE=${image}" >> "${GITHUB_ENV}"
+          printf 'Testing Forgejo %s with %s\n' "${FORGEJO_VERSION}" "${image}"
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -70,7 +102,7 @@ jobs:
             --env FORGEJO__server__HTTP_PORT=3000 \
             --env FORGEJO__server__CERT_FILE=/data/cert.pem \
             --env FORGEJO__server__KEY_FILE=/data/key.pem \
-            codeberg.org/forgejo/forgejo:16.0.5@sha256:cf5f5ae6acf2ababca0ee3d255705b83a47f35b25e07fc931d694d60664053fe
+            "${FORGEJO_IMAGE}"
 
       - name: Wait for Forgejo
         run: |
@@ -80,7 +112,10 @@ jobs:
               --fail \
               --silent \
               --show-error \
-              https://localhost:3000/api/v1/version > /dev/null; then
+              https://localhost:3000/api/v1/version > "${RUNNER_TEMP}/forgejo-version.json"; then
+              jq --exit-status --arg version "${FORGEJO_VERSION}" \
+                '(.version | split("+")[0]) == $version' "${RUNNER_TEMP}/forgejo-version.json"
+              printf 'Verified Forgejo %s\n' "${FORGEJO_VERSION}"
               exit 0
             fi
             sleep 1
