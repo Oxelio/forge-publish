@@ -75,6 +75,14 @@ jobs:
       - name: Run tests
         run: pytest
 
+      - name: Export coverage for SonarQube Cloud
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sonar-coverage
+          path: coverage.xml
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Build distribution
         env:
           PIP_BUILD_CONSTRAINT: ${{ github.workspace }}/requirements/build.txt
@@ -114,6 +122,15 @@ jobs:
           "${sdist_venv}/bin/python" -m pip check
           "${sdist_venv}/bin/forge-publish" --version
           "${sdist_venv}/bin/python" -m forge_publish --help
+
+  sonar:
+    name: SonarQube Cloud
+    needs: quality
+    # Forks never enter a job with the repository's Sonar secret.
+    if: ${{ github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository }}
+    uses: ./.github/workflows/sonar.yml
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   typecheck:
     name: Pyright
