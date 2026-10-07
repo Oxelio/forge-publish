@@ -2,6 +2,13 @@
 
 A small Python CLI for publishing packages to a Forgejo package registry.
 
+[![CI (pull requests)](https://github.com/Oxelio/forge-publish/actions/workflows/ci.yml/badge.svg?event=pull_request)](https://github.com/Oxelio/forge-publish/actions/workflows/ci.yml)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Oxelio_forge-publish&metric=coverage)](https://sonarcloud.io/summary/overall?id=Oxelio_forge-publish)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=Oxelio_forge-publish&metric=alert_status)](https://sonarcloud.io/summary/overall?id=Oxelio_forge-publish)
+[![Release](https://img.shields.io/github/v/release/Oxelio/forge-publish)](https://github.com/Oxelio/forge-publish/releases)
+[![Python >= 3.11](https://img.shields.io/badge/python-%3E%3D%203.11-blue)](#requirements)
+[![License: Apache-2.0](https://img.shields.io/github/license/Oxelio/forge-publish)](LICENSE)
+
 Supported package types:
 
 - Debian packages
