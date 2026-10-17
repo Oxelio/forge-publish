@@ -186,7 +186,7 @@ Pull requests run:
 - Windows compatibility on Python 3.11 and 3.14, including dev/release dependency resolution and `pip check`
 - SonarQube Cloud analysis and the Sonar Way Quality Gate for trusted pull requests
 
-The repository ruleset continues to require the `Quality checks` status. CI runs Dependency Review, the main quality suite, Pyright, Forgejo integration, the Linux compatibility matrix, the Windows compatibility matrix, and SonarQube Cloud in parallel. A final job named `Quality checks` depends on all seven groups and fails unless every validation succeeds. Sonar is required for internal pull requests; for fork pull requests, the aggregate accepts only the expected `skipped` result because the secret-bearing job cannot safely run untrusted code.
+The repository ruleset continues to require the `Quality checks` status. CI runs Dependency Review, the main quality suite, Pyright, Forgejo integration, the Linux compatibility matrix, the Windows compatibility matrix, and SonarQube Cloud in parallel. A final job named `Quality checks` depends on all seven groups and fails unless every validation succeeds. Sonar is required for ordinary internal pull requests; for forks and official same-repository Dependabot pull requests, the aggregate accepts only the expected `skipped` result under the secret-free policy described below.
 
 Dependency Review evaluates only dependency changes introduced by the pull request and fails for newly introduced known vulnerabilities with high or critical severity. It uses read-only repository contents permission and reports findings through the GitHub Actions check output. License enforcement is explicitly disabled until the project defines a dependency-license policy. Dependabot remains enabled for weekly GitHub Actions and Python dependency updates; it is complementary to this merge-time review rather than replaced by it.
 
@@ -292,10 +292,10 @@ Development, CI, integration, and release environments use `requirements/tooling
 ## SonarQube Cloud quality analysis
 
 The integration uses **SonarQube Cloud** with the built-in **Sonar Way** Quality
-Gate. For internal pull requests, its analysis job waits for the gate and must
-succeed for the required `Quality checks` aggregate to pass. Fork pull requests
-must produce the expected Sonar skip because they cannot receive the repository
-secret. Sonar is not a separate required repository check. Do not interpret
+Gate. For ordinary internal pull requests, its analysis job waits for the gate
+and must succeed for the required `Quality checks` aggregate to pass. Fork and
+official same-repository Dependabot pull requests must produce the expected
+Sonar skip without entering secret-bearing jobs. Sonar is not a separate required repository check. Do not interpret
 missing setup or a failed analysis as a passing Quality Gate. Baseline findings
 and actual fork-PR behavior still need validation before calling the rollout
 complete.
@@ -315,6 +315,7 @@ complete.
    the copied non-secret values. The URL must use HTTPS and identify the chosen
    Cloud region. Create repository secret `SONAR_TOKEN` with analysis permission
    for this project. Never put its value in source, an issue or a workflow log.
+   Do not provision a Dependabot `SONAR_TOKEN`; bot PRs use the secret-free exception.
 4. After the workflow is on `main`, run **SonarQube Cloud** manually from `main`
    or inspect its next non-release push run. Inspect **Sonar analysis and Quality
    Gate** in Actions and the linked Cloud project: verify the analyzed SHA,
@@ -342,18 +343,39 @@ findings and the gate through the Sonar PR decoration/project link and the
 Actions analysis logs. Review and triage baseline findings as part of rollout
 validation before tightening the Quality Gate policy further.
 
-Forks, including dependency-bot PRs from external repositories, cannot enter
-the secret-bearing Sonar call. This is an expected skip, not evidence of a
-successful analysis. No `pull_request_target` or privileged `workflow_run`
-consumes PR code or artifacts. Missing variables/token on an internal PR or
-`main` cause an explicit setup failure in the analysis job; on internal pull
-requests, this also fails the required `Quality checks` aggregate.
+Forks, including dependency-bot PRs from external repositories, and official
+same-repository Dependabot PRs cannot enter the secret-bearing Sonar call.
+Dependabot classification uses GitHub's PR author metadata (`user.login` equal
+to `dependabot[bot]`) together with repository equality, never titles, branch
+names, labels, commit messages or the actor requesting a rerun. Both the CI
+caller and reusable analysis workflow enforce this policy; drafts retain their
+existing skipped validations.
 
-The aggregate accepts only Sonar `success` for internal pull requests and only
-Sonar `skipped` for fork pull requests. An analysis or gate failure, cancellation,
-or unexpected skip on an internal PR blocks merging. The other validation groups
-must succeed in both contexts. Keep `Quality checks` as the stable required
-check when changing the Sonar policy.
+GitHub supplies Dependabot secrets rather than Actions secrets to
+[Dependabot-triggered PR workflows](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-on-actions),
+including reruns initiated by a maintainer. Rerunning does not make the Actions
+Sonar token available or change the PR's classification. The deliberate trade-off
+is no pre-merge Sonar new-code analysis or PR decoration for Dependabot updates.
+The existing `main` push analysis and Sonar Way gate remain in place after merge
+(generated `[skip ci]` release commits keep their existing exclusion).
+No `pull_request_target` or privileged `workflow_run` consumes PR code or artifacts.
+Missing variables/token on an ordinary internal PR or `main` cause an explicit
+setup failure; on ordinary internal PRs this also fails `Quality checks`.
+
+The aggregate accepts only Sonar `success` for ordinary internal PRs and only
+Sonar `skipped` for forks and official same-repository Dependabot PRs. Failure,
+cancellation or an unexpected result (including Sonar success for an exempt PR)
+blocks merging. Dependency review, quality, Pyright, Linux/Windows matrices and
+Forgejo integration must succeed for every non-draft PR class; a skipped mandatory
+validation also blocks the aggregate. Keep `Quality checks` as the stable required
+status and preserve read-only permissions and pinned actions.
+
+For Dependabot updates to the Sonar scanner or privileged CI actions/workflows
+(including #76's scanner 8.3.0 update), manually review the workflow changes and
+validate the proposed scanner version in a trusted PR or equivalent secret-safe
+staging run before merging. A green Dependabot aggregate does not exercise its
+scanner version and is insufficient compatibility evidence. Record that trusted
+validation on the dependency PR; do not auto-merge these upgrades without it.
 
 ## CodeQL code scanning
 

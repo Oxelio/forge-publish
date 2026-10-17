@@ -126,8 +126,9 @@ jobs:
   sonar:
     name: SonarQube Cloud
     needs: quality
-    # Forks never enter a job with the repository's Sonar secret.
-    if: ${{ github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository }}
+    # Forks and official Dependabot PRs never enter a job with the Sonar secret.
+    # Use the PR author, which remains stable when another actor reruns CI.
+    if: ${{ github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' }}
     uses: ./.github/workflows/sonar.yml
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -265,6 +266,7 @@ jobs:
           WINDOWS_RESULT: ${{ needs.windows.result }}
           SONAR_RESULT: ${{ needs.sonar.result }}
           IS_FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+          IS_DEPENDABOT: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login == 'dependabot[bot]' }}
         run: |
           printf 'Dependency review: %s\n' "${DEPENDENCY_REVIEW_RESULT}"
           printf 'Forgejo integration: %s\n' "${INTEGRATION_RESULT}"
@@ -283,9 +285,9 @@ jobs:
             exit 1
           fi
 
-          if [ "${IS_FORK}" = "true" ]; then
+          if [ "${IS_FORK}" = "true" ] || [ "${IS_DEPENDABOT}" = "true" ]; then
             if [ "${SONAR_RESULT}" != "skipped" ]; then
-              echo 'Expected SonarQube Cloud to be skipped for a fork pull request.' >&2
+              echo 'Expected SonarQube Cloud to be skipped for a fork or official Dependabot pull request.' >&2
               exit 1
             fi
           elif [ "${SONAR_RESULT}" != "success" ]; then

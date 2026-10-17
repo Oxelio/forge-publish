@@ -61,12 +61,13 @@ jobs:
     name: Sonar analysis and Quality Gate
     needs: coverage
     # always() permits the expected coverage-job skip in a trusted PR call.
-    # Failed main coverage, forks, drafts and non-main manual runs cannot scan.
+    # Failed main coverage, forks, Dependabot, drafts and non-main manual runs cannot scan.
     if: >-
       ${{ always() && !cancelled() &&
           ((github.event_name == 'pull_request' &&
             github.event.pull_request.draft == false &&
-            github.event.pull_request.head.repo.full_name == github.repository) ||
+            github.event.pull_request.head.repo.full_name == github.repository &&
+            github.event.pull_request.user.login != 'dependabot[bot]') ||
            (github.ref == 'refs/heads/main' && needs.coverage.result == 'success')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
