@@ -179,6 +179,7 @@ Pull requests run:
 - Pyright production-source checking with a locked checker and Python 3.11 baseline
 - universal tooling-constraints regeneration and Ruff/Commitizen hook alignment
 - unit tests with coverage
+- coverage artifact upload/download and byte-for-byte comparison, including on Dependabot and fork PRs
 - dependency review for pull request dependency changes, blocking newly introduced high/critical known vulnerabilities
 - wheel and sdist build verification
 - Python 3.11, 3.12, and 3.13 compatibility jobs on Linux, including dev/release dependency resolution and `pip check`
