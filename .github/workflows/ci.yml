@@ -83,6 +83,16 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      # Exercise the artifact consumer even when Sonar is skipped for a bot/fork.
+      - name: Download coverage for artifact validation
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: sonar-coverage
+          path: ${{ runner.temp }}/forge-publish-coverage-roundtrip
+
+      - name: Verify coverage artifact contents
+        run: cmp coverage.xml "${RUNNER_TEMP}/forge-publish-coverage-roundtrip/coverage.xml"
+
       - name: Build distribution
         env:
           PIP_BUILD_CONSTRAINT: ${{ github.workspace }}/requirements/build.txt
