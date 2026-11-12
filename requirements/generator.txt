@@ -1,2 +1,2 @@
 # Bootstrap the constraints generator independently of the generated closure.
-uv==0.13.5
+uv==0.13.7
